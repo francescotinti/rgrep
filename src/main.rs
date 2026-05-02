@@ -1,8 +1,12 @@
 use clap::Parser;
 use rgrep::cli::Config;
+use std::process;
 
 fn main() {
     let config = Config::parse();
-    println!("Parsed config: {:?}", config);
-    // Il resto della logica verrà implementato nelle prossime fasi.
+    
+    if let Err(e) = rgrep::runner::run(config) {
+        eprintln!("rgrep: {}", e);
+        process::exit(1);
+    }
 }
