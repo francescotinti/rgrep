@@ -105,6 +105,10 @@ mod tests {
             exclude: vec![],
             include: vec![],
             exclude_dir: vec![],
+            byte_offset: false,
+            null: false,
+            null_data: false,
+            text: false,
         }
     }
 

@@ -103,6 +103,22 @@ pub struct Config {
     #[arg(long = "exclude-dir", action = clap::ArgAction::Append)]
     pub exclude_dir: Vec<String>,
 
+    /// Print the 0-based byte offset within the input file before each line of output.
+    #[arg(short = 'b', long = "byte-offset")]
+    pub byte_offset: bool,
+
+    /// Output a zero byte (the ASCII NUL character) instead of the character that normally follows a file name.
+    #[arg(short = 'Z', long = "null")]
+    pub null: bool,
+
+    /// Treat input and output data as sequences of lines, each terminated by a zero byte instead of a newline.
+    #[arg(short = 'z', long = "null-data")]
+    pub null_data: bool,
+
+    /// Process a binary file as if it were text.
+    #[arg(short = 'a', long = "text")]
+    pub text: bool,
+
     /// A pattern to search for (if -e or -f is not provided)
     #[arg(required_unless_present_any = ["regexp", "file_patterns"])]
     pub pattern: Option<String>,

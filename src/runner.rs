@@ -6,6 +6,7 @@ use std::error::Error;
 use std::collections::VecDeque;
 use walkdir::WalkDir;
 use memmap2::MmapOptions;
+use globset::{Glob, GlobSet, GlobSetBuilder};
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let matcher = Matcher::new(&config)?;
@@ -51,30 +52,52 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 fn process_file<R: BufRead>(
     config: &Config,
     matcher: &Matcher,
-    reader: R,
+    mut reader: R,
     filename: &str,
     print_filename: bool,
 ) -> Result<(), Box<dyn Error>> {
     let before_ctx = config.get_before_context();
     let after_ctx = config.get_after_context();
+    let delimiter = if config.null_data { 0 } else { b'\n' };
 
     let mut line_number = 1;
+    let mut byte_offset = 0;
     let mut match_count = 0;
     let mut has_match = false;
     
-    let mut history: VecDeque<(usize, String)> = VecDeque::with_capacity(before_ctx);
+    // (line_number, byte_offset, text)
+    let mut history: VecDeque<(usize, usize, String)> = VecDeque::with_capacity(before_ctx);
     let mut print_after = 0;
     let mut last_printed_line = 0;
 
-    for line_result in reader.lines() {
-        let line = match line_result {
-            Ok(l) => l,
-            Err(_) => continue,
+    let mut buffer = Vec::new();
+
+    loop {
+        buffer.clear();
+        let bytes_read = match reader.read_until(delimiter, &mut buffer) {
+            Ok(0) => break,
+            Ok(n) => n,
+            Err(_) => break,
         };
+
+        // Binary file check (heuristic: contains null byte but we are not in null_data mode)
+        // If we are not in text mode and we find a null byte, we could abort. But for simplicity, we treat as text or skip.
+        // We'll just continue processing as string_lossy.
         
+        let line_cow = String::from_utf8_lossy(&buffer);
+        let mut line_str = line_cow.as_ref();
+        if line_str.ends_with(delimiter as char) {
+            line_str = &line_str[..line_str.len() - 1];
+        }
+        
+        // Remove trailing \r if parsing \n
+        if delimiter == b'\n' && line_str.ends_with('\r') {
+            line_str = &line_str[..line_str.len() - 1];
+        }
+
         let mut is_match = false;
         if config.max_count.map_or(true, |m| match_count < m) {
-            is_match = matcher.is_match(&line);
+            is_match = matcher.is_match(line_str);
         }
 
         if is_match {
@@ -90,7 +113,7 @@ fn process_file<R: BufRead>(
             } else {
                 // Context Separator
                 let mut first_to_print = line_number;
-                for (h_line_num, _) in &history {
+                for (h_line_num, _, _) in &history {
                     if *h_line_num > last_printed_line {
                         first_to_print = *h_line_num;
                         break;
@@ -102,9 +125,9 @@ fn process_file<R: BufRead>(
                 }
 
                 // Print history
-                for (h_line_num, h_line) in &history {
+                for (h_line_num, h_byte_offset, h_line) in &history {
                     if *h_line_num > last_printed_line {
-                        print_line(config, filename, print_filename, *h_line_num, h_line, false);
+                        print_line(config, filename, print_filename, *h_line_num, *h_byte_offset, h_line, false);
                         last_printed_line = *h_line_num;
                     }
                 }
@@ -112,14 +135,14 @@ fn process_file<R: BufRead>(
 
                 // Print matched line
                 if config.only_matching {
-                    let matches = matcher.find_matches(&line);
+                    let matches = matcher.find_matches(line_str);
                     for m in matches {
                         let output = if config.color { format!("\x1b[31;1m{}\x1b[0m", m) } else { m };
-                        print_line(config, filename, print_filename, line_number, &output, true);
+                        print_line(config, filename, print_filename, line_number, byte_offset, &output, true);
                     }
                 } else {
-                    let output_line = if config.color { matcher.highlight(&line) } else { line.to_string() };
-                    print_line(config, filename, print_filename, line_number, &output_line, true);
+                    let output_line = if config.color { matcher.highlight(line_str) } else { line_str.to_string() };
+                    print_line(config, filename, print_filename, line_number, byte_offset, &output_line, true);
                 }
                 last_printed_line = line_number;
                 print_after = after_ctx;
@@ -127,7 +150,7 @@ fn process_file<R: BufRead>(
         } else {
             if print_after > 0 {
                 if !(config.files_with_matches || config.files_without_match || config.count || config.only_matching) {
-                    print_line(config, filename, print_filename, line_number, &line, false);
+                    print_line(config, filename, print_filename, line_number, byte_offset, line_str, false);
                 }
                 last_printed_line = line_number;
                 print_after -= 1;
@@ -135,7 +158,7 @@ fn process_file<R: BufRead>(
                 if history.len() == before_ctx && before_ctx > 0 {
                     history.pop_front();
                 }
-                history.push_back((line_number, line.clone()));
+                history.push_back((line_number, byte_offset, line_str.to_string()));
             }
         }
 
@@ -145,16 +168,20 @@ fn process_file<R: BufRead>(
             }
         }
 
+        byte_offset += bytes_read;
         line_number += 1;
     }
 
     if config.files_without_match && !has_match {
-        println!("{}", filename);
+        let term = if config.null { '\0' } else { '\n' };
+        print!("{}{}", filename, term);
     } else if config.files_with_matches && has_match {
-        println!("{}", filename);
+        let term = if config.null { '\0' } else { '\n' };
+        print!("{}{}", filename, term);
     } else if config.count {
         if print_filename {
-            println!("{}:{}", filename, match_count);
+            let sep = if config.null { '\0' } else { ':' };
+            println!("{}{}{}", filename, sep, match_count);
         } else {
             println!("{}", match_count);
         }
@@ -162,8 +189,6 @@ fn process_file<R: BufRead>(
 
     Ok(())
 }
-
-use globset::{Glob, GlobSet, GlobSetBuilder};
 
 fn build_globset(patterns: &[String]) -> Result<GlobSet, Box<dyn Error>> {
     let mut builder = GlobSetBuilder::new();
@@ -237,17 +262,26 @@ fn resolve_files(config: &Config) -> Result<Vec<String>, Box<dyn Error>> {
     Ok(resolved_files)
 }
 
-fn print_line(config: &Config, filename: &str, print_filename: bool, line_number: usize, line: &str, is_match: bool) {
+fn print_line(config: &Config, filename: &str, print_filename: bool, line_number: usize, byte_offset: usize, line: &str, is_match: bool) {
     let sep = if is_match { ":" } else { "-" };
     let sep_col = if config.color { format!("\x1b[36m{}\x1b[0m", sep) } else { sep.to_string() };
+    let null_sep = "\0";
 
     if print_filename {
         let fname_col = if config.color { format!("\x1b[35m{}\x1b[0m", filename) } else { filename.to_string() };
-        print!("{}{}", fname_col, sep_col);
+        if config.null {
+            print!("{}{}", fname_col, null_sep);
+        } else {
+            print!("{}{}", fname_col, sep_col);
+        }
     }
     if config.line_number {
         let lnum_col = if config.color { format!("\x1b[32m{}\x1b[0m", line_number) } else { line_number.to_string() };
         print!("{}{}", lnum_col, sep_col);
+    }
+    if config.byte_offset {
+        let boff_col = if config.color { format!("\x1b[32m{}\x1b[0m", byte_offset) } else { byte_offset.to_string() };
+        print!("{}{}", boff_col, sep_col);
     }
     println!("{}", line);
 }
