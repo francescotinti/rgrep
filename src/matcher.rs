@@ -34,12 +34,16 @@ impl<'a> Matcher<'a> {
         
         let mut combined = final_patterns.join("|");
         
-        if config.word_regexp {
+        if config.line_regexp {
+            combined = format!(r"^(?:{})$", combined);
+        } else if config.word_regexp {
             combined = format!(r"\b(?:{})\b", combined);
         }
         
+        let ignore_case = config.ignore_case && !config.no_ignore_case;
+        
         let re = RegexBuilder::new(&combined)
-            .case_insensitive(config.ignore_case)
+            .case_insensitive(ignore_case)
             .build()?;
 
         Ok(Self { config, re })
@@ -78,6 +82,22 @@ mod tests {
 
     fn get_base_config(pattern: &str) -> Config {
         Config {
+            extended_regexp: false,
+            basic_regexp: false,
+            no_ignore_case: false,
+            line_regexp: false,
+            dereference_recursive: false,
+            directories: None,
+            devices: None,
+            no_messages: false,
+            group_separator: "--".to_string(),
+            no_group_separator: false,
+            exclude_from: None,
+            binary_files: None,
+            binary: false,
+            initial_tab: false,
+            label: "(standard input)".to_string(),
+            line_buffered: false,
             pattern: Some(pattern.to_string()),
             files: vec![],
             ignore_case: false,
@@ -146,6 +166,15 @@ mod tests {
         assert!(!matcher.is_match("say helloworld to him"));
     }
     
+    #[test]
+    fn test_is_match_line_regexp() {
+        let mut config = get_base_config("hello");
+        config.line_regexp = true;
+        let matcher = Matcher::new(&config).unwrap();
+        assert!(matcher.is_match("hello"));
+        assert!(!matcher.is_match("say hello"));
+    }
+
     #[test]
     fn test_is_match_regex() {
         let config = get_base_config("h.*o");

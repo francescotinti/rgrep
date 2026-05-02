@@ -3,9 +3,21 @@ use clap::Parser;
 #[derive(Parser, Debug, PartialEq)]
 #[command(author, version, about = "A Rust implementation of GNU grep")]
 pub struct Config {
+    /// Interpret PATTERNS as extended regular expressions.
+    #[arg(short = 'E', long = "extended-regexp")]
+    pub extended_regexp: bool,
+
+    /// Interpret PATTERNS as basic regular expressions.
+    #[arg(short = 'G', long = "basic-regexp")]
+    pub basic_regexp: bool,
+
     /// Ignore case distinctions in patterns and input data
     #[arg(short = 'i', long = "ignore-case")]
     pub ignore_case: bool,
+
+    /// Do not ignore case distinctions.
+    #[arg(long = "no-ignore-case")]
+    pub no_ignore_case: bool,
 
     /// Invert the sense of matching, to select non-matching lines
     #[arg(short = 'v', long = "invert-match")]
@@ -23,9 +35,25 @@ pub struct Config {
     #[arg(short = 'w', long = "word-regexp")]
     pub word_regexp: bool,
 
+    /// Select only those matches that exactly match the whole line.
+    #[arg(short = 'x', long = "line-regexp")]
+    pub line_regexp: bool,
+
     /// Read all files under each directory, recursively
     #[arg(short = 'r', long = "recursive")]
     pub recursive: bool,
+
+    /// Read all files under each directory, recursively. Follow all symlinks.
+    #[arg(short = 'R', long = "dereference-recursive")]
+    pub dereference_recursive: bool,
+
+    /// How to handle directories (read, recurse, skip).
+    #[arg(short = 'd', long = "directories")]
+    pub directories: Option<String>,
+
+    /// How to handle devices, FIFOs and sockets (read, skip).
+    #[arg(short = 'D', long = "devices")]
+    pub devices: Option<String>,
 
     /// Highlight matches in output
     #[arg(long = "color")]
@@ -42,6 +70,10 @@ pub struct Config {
     /// Quiet; do not write anything to standard output. Exit immediately with zero status if any match is found.
     #[arg(short = 'q', long = "quiet", visible_alias = "silent")]
     pub quiet: bool,
+
+    /// Suppress error messages about nonexistent or unreadable files.
+    #[arg(short = 's', long = "no-messages")]
+    pub no_messages: bool,
 
     /// Suppress the prefixing of file names on output.
     #[arg(short = 'h', long = "no-filename")]
@@ -66,6 +98,14 @@ pub struct Config {
     /// Print NUM lines of output context.
     #[arg(short = 'C', long = "context", default_value_t = 0)]
     pub context: usize,
+
+    /// Use SEP as a group separator (default is `--`).
+    #[arg(long = "group-separator", default_value = "--")]
+    pub group_separator: String,
+
+    /// Do not use a group separator.
+    #[arg(long = "no-group-separator")]
+    pub no_group_separator: bool,
 
     /// Stop reading a file after NUM matching lines.
     #[arg(short = 'm', long = "max-count")]
@@ -95,6 +135,10 @@ pub struct Config {
     #[arg(long = "exclude", action = clap::ArgAction::Append)]
     pub exclude: Vec<String>,
 
+    /// Read exclude patterns from FILE.
+    #[arg(long = "exclude-from")]
+    pub exclude_from: Option<String>,
+
     /// Search only files that match GLOB.
     #[arg(long = "include", action = clap::ArgAction::Append)]
     pub include: Vec<String>,
@@ -118,6 +162,26 @@ pub struct Config {
     /// Process a binary file as if it were text.
     #[arg(short = 'a', long = "text")]
     pub text: bool,
+
+    /// Treat binary files as TYPE (binary, text, without-match).
+    #[arg(long = "binary-files")]
+    pub binary_files: Option<String>,
+
+    /// Treat the file(s) as binary.
+    #[arg(short = 'U', long = "binary")]
+    pub binary: bool,
+
+    /// Line up tabs so that tabs align.
+    #[arg(short = 'T', long = "initial-tab")]
+    pub initial_tab: bool,
+
+    /// Use LABEL as the standard input file name prefix.
+    #[arg(long = "label", default_value = "(standard input)")]
+    pub label: String,
+
+    /// Flush output on every line.
+    #[arg(long = "line-buffered")]
+    pub line_buffered: bool,
 
     /// A pattern to search for (if -e or -f is not provided)
     #[arg(required_unless_present_any = ["regexp", "file_patterns"])]

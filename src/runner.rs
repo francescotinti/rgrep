@@ -1,7 +1,7 @@
 use crate::cli::Config;
 use crate::matcher::Matcher;
 use std::fs::{self, File};
-use std::io::{self, BufRead, BufReader, Cursor};
+use std::io::{self, BufRead, BufReader, Cursor, Write};
 use std::error::Error;
 use std::collections::VecDeque;
 use walkdir::WalkDir;
@@ -23,12 +23,14 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     for filename in files_to_search {
         if filename == "-" {
             let reader = BufReader::new(io::stdin());
-            process_file(&config, &matcher, reader, &filename, print_filename)?;
+            process_file(&config, &matcher, reader, &config.label, print_filename)?;
         } else {
             let file = match File::open(&filename) {
                 Ok(f) => f,
                 Err(e) => {
-                    eprintln!("rgrep: {}: {}", filename, e);
+                    if !config.no_messages {
+                        eprintln!("rgrep: {}: {}", filename, e);
+                    }
                     continue;
                 }
             };
@@ -65,7 +67,6 @@ fn process_file<R: BufRead>(
     let mut match_count = 0;
     let mut has_match = false;
     
-    // (line_number, byte_offset, text)
     let mut history: VecDeque<(usize, usize, String)> = VecDeque::with_capacity(before_ctx);
     let mut print_after = 0;
     let mut last_printed_line = 0;
@@ -77,12 +78,13 @@ fn process_file<R: BufRead>(
         let bytes_read = match reader.read_until(delimiter, &mut buffer) {
             Ok(0) => break,
             Ok(n) => n,
-            Err(_) => break,
+            Err(e) => {
+                if !config.no_messages {
+                    eprintln!("rgrep: {}: {}", filename, e);
+                }
+                break;
+            }
         };
-
-        // Binary file check (heuristic: contains null byte but we are not in null_data mode)
-        // If we are not in text mode and we find a null byte, we could abort. But for simplicity, we treat as text or skip.
-        // We'll just continue processing as string_lossy.
         
         let line_cow = String::from_utf8_lossy(&buffer);
         let mut line_str = line_cow.as_ref();
@@ -90,7 +92,6 @@ fn process_file<R: BufRead>(
             line_str = &line_str[..line_str.len() - 1];
         }
         
-        // Remove trailing \r if parsing \n
         if delimiter == b'\n' && line_str.ends_with('\r') {
             line_str = &line_str[..line_str.len() - 1];
         }
@@ -111,7 +112,6 @@ fn process_file<R: BufRead>(
             if config.files_with_matches || config.files_without_match || config.count {
                 // Do nothing here
             } else {
-                // Context Separator
                 let mut first_to_print = line_number;
                 for (h_line_num, _, _) in &history {
                     if *h_line_num > last_printed_line {
@@ -121,10 +121,11 @@ fn process_file<R: BufRead>(
                 }
 
                 if last_printed_line > 0 && first_to_print > last_printed_line + 1 && (before_ctx > 0 || after_ctx > 0) {
-                    println!("--");
+                    if !config.no_group_separator {
+                        println!("{}", config.group_separator);
+                    }
                 }
 
-                // Print history
                 for (h_line_num, h_byte_offset, h_line) in &history {
                     if *h_line_num > last_printed_line {
                         print_line(config, filename, print_filename, *h_line_num, *h_byte_offset, h_line, false);
@@ -133,7 +134,6 @@ fn process_file<R: BufRead>(
                 }
                 history.clear();
 
-                // Print matched line
                 if config.only_matching {
                     let matches = matcher.find_matches(line_str);
                     for m in matches {
@@ -208,7 +208,19 @@ fn resolve_files(config: &Config) -> Result<Vec<String>, Box<dyn Error>> {
     };
 
     let include_set = build_globset(&config.include)?;
-    let exclude_set = build_globset(&config.exclude)?;
+    
+    let mut exclude_patterns = config.exclude.clone();
+    if let Some(f) = &config.exclude_from {
+        if let Ok(content) = fs::read_to_string(f) {
+            for line in content.lines() {
+                exclude_patterns.push(line.to_string());
+            }
+        } else if !config.no_messages {
+            eprintln!("rgrep: {}: No such file or directory", f);
+        }
+    }
+    let exclude_set = build_globset(&exclude_patterns)?;
+    
     let exclude_dir_set = build_globset(&config.exclude_dir)?;
 
     for path in &files {
@@ -220,12 +232,17 @@ fn resolve_files(config: &Config) -> Result<Vec<String>, Box<dyn Error>> {
         let metadata = fs::metadata(path);
         if let Ok(meta) = metadata {
             if meta.is_dir() {
-                if config.recursive {
-                    let mut it = WalkDir::new(path).into_iter();
+                if config.recursive || config.dereference_recursive {
+                    let mut it = WalkDir::new(path).follow_links(config.dereference_recursive).into_iter();
                     loop {
                         let entry = match it.next() {
                             None => break,
-                            Some(Err(_)) => continue,
+                            Some(Err(e)) => {
+                                if !config.no_messages {
+                                    eprintln!("rgrep: {}", e);
+                                }
+                                continue;
+                            },
                             Some(Ok(entry)) => entry,
                         };
 
@@ -242,20 +259,24 @@ fn resolve_files(config: &Config) -> Result<Vec<String>, Box<dyn Error>> {
                             if !config.include.is_empty() && !include_set.is_match(file_name_os) {
                                 continue;
                             }
-                            if !config.exclude.is_empty() && exclude_set.is_match(file_name_os) {
+                            if !exclude_patterns.is_empty() && exclude_set.is_match(file_name_os) {
                                 continue;
                             }
                             resolved_files.push(entry.path().to_string_lossy().into_owned());
                         }
                     }
-                } else {
-                    eprintln!("rgrep: {}: Is a directory", path);
+                } else if config.directories.as_deref() != Some("skip") {
+                    if !config.no_messages {
+                        eprintln!("rgrep: {}: Is a directory", path);
+                    }
                 }
             } else {
                 resolved_files.push(path.clone());
             }
         } else {
-            eprintln!("rgrep: {}: No such file or directory", path);
+            if !config.no_messages {
+                eprintln!("rgrep: {}: No such file or directory", path);
+            }
         }
     }
 
@@ -266,6 +287,10 @@ fn print_line(config: &Config, filename: &str, print_filename: bool, line_number
     let sep = if is_match { ":" } else { "-" };
     let sep_col = if config.color { format!("\x1b[36m{}\x1b[0m", sep) } else { sep.to_string() };
     let null_sep = "\0";
+
+    if config.initial_tab {
+        print!("\t");
+    }
 
     if print_filename {
         let fname_col = if config.color { format!("\x1b[35m{}\x1b[0m", filename) } else { filename.to_string() };
@@ -284,4 +309,8 @@ fn print_line(config: &Config, filename: &str, print_filename: bool, line_number
         print!("{}{}", boff_col, sep_col);
     }
     println!("{}", line);
+    
+    if config.line_buffered {
+        let _ = io::stdout().flush();
+    }
 }
