@@ -2,9 +2,10 @@ use crate::cli::Config;
 use crate::matcher::Matcher;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
+use std::error::Error;
 
-pub fn run(config: Config) -> Result<(), io::Error> {
-    let matcher = Matcher::new(&config);
+pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
+    let matcher = Matcher::new(&config)?;
     let multiple_files = config.files.len() > 1;
 
     for filename in &config.files {
