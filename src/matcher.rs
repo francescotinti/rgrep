@@ -1,5 +1,6 @@
 use crate::cli::Config;
 use regex::{Regex, RegexBuilder};
+use std::error::Error;
 
 pub struct Matcher<'a> {
     config: &'a Config,
@@ -7,14 +8,37 @@ pub struct Matcher<'a> {
 }
 
 impl<'a> Matcher<'a> {
-    pub fn new(config: &'a Config) -> Result<Self, regex::Error> {
-        let mut pattern_str = config.pattern.clone();
-
-        if config.word_regexp {
-            pattern_str = format!(r"\b(?:{})\b", pattern_str);
+    pub fn new(config: &'a Config) -> Result<Self, Box<dyn Error>> {
+        let mut raw_patterns = Vec::new();
+        
+        if let Some(p) = &config.pattern {
+            raw_patterns.push(p.clone());
         }
-
-        let re = RegexBuilder::new(&pattern_str)
+        
+        for p in &config.regexp {
+            raw_patterns.push(p.clone());
+        }
+        
+        for f in &config.file_patterns {
+            let content = std::fs::read_to_string(f)?;
+            for line in content.lines() {
+                raw_patterns.push(line.to_string());
+            }
+        }
+        
+        let final_patterns: Vec<String> = if config.fixed_strings {
+            raw_patterns.into_iter().map(|p| regex::escape(&p)).collect()
+        } else {
+            raw_patterns
+        };
+        
+        let mut combined = final_patterns.join("|");
+        
+        if config.word_regexp {
+            combined = format!(r"\b(?:{})\b", combined);
+        }
+        
+        let re = RegexBuilder::new(&combined)
             .case_insensitive(config.ignore_case)
             .build()?;
 
@@ -41,7 +65,7 @@ impl<'a> Matcher<'a> {
 
     pub fn find_matches(&self, line: &str) -> Vec<String> {
         if self.config.invert_match {
-            return vec![]; // -o doesn't usually make sense with -v, but we return empty for simplicity
+            return vec![]; 
         }
         self.re.find_iter(line).map(|m| m.as_str().to_string()).collect()
     }
@@ -54,7 +78,7 @@ mod tests {
 
     fn get_base_config(pattern: &str) -> Config {
         Config {
-            pattern: pattern.to_string(),
+            pattern: Some(pattern.to_string()),
             files: vec![],
             ignore_case: false,
             invert_match: false,
@@ -74,6 +98,10 @@ mod tests {
             context: 0,
             max_count: None,
             mmap: false,
+            regexp: vec![],
+            file_patterns: vec![],
+            fixed_strings: false,
+            perl_regexp: false,
         }
     }
 
@@ -116,5 +144,24 @@ mod tests {
         let config = get_base_config("h.*o");
         let matcher = Matcher::new(&config).unwrap();
         assert!(matcher.is_match("say hello to him"));
+    }
+
+    #[test]
+    fn test_multiple_patterns() {
+        let mut config = get_base_config("hello");
+        config.regexp = vec!["world".to_string()];
+        let matcher = Matcher::new(&config).unwrap();
+        assert!(matcher.is_match("say hello to him"));
+        assert!(matcher.is_match("what a beautiful world"));
+        assert!(!matcher.is_match("something else entirely"));
+    }
+
+    #[test]
+    fn test_fixed_strings() {
+        let mut config = get_base_config("h.*o");
+        config.fixed_strings = true;
+        let matcher = Matcher::new(&config).unwrap();
+        assert!(!matcher.is_match("say hello to him"));
+        assert!(matcher.is_match("literal h.*o string"));
     }
 }

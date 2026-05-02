@@ -166,7 +166,13 @@ fn process_file<R: BufRead>(
 fn resolve_files(config: &Config) -> Result<Vec<String>, Box<dyn Error>> {
     let mut resolved_files = Vec::new();
 
-    for path in &config.files {
+    let files = if config.files.is_empty() {
+        vec!["-".to_string()]
+    } else {
+        config.files.clone()
+    };
+
+    for path in &files {
         if path == "-" {
             resolved_files.push(path.clone());
             continue;

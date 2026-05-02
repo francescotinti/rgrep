@@ -75,12 +75,28 @@ pub struct Config {
     #[arg(long = "mmap")]
     pub mmap: bool,
 
-    /// The pattern to search for
-    #[arg(required = true)]
-    pub pattern: String,
+    /// Use PATTERN as the pattern.
+    #[arg(short = 'e', long = "regexp", action = clap::ArgAction::Append)]
+    pub regexp: Vec<String>,
+
+    /// Obtain PATTERN from FILE.
+    #[arg(short = 'f', long = "file", action = clap::ArgAction::Append)]
+    pub file_patterns: Vec<String>,
+
+    /// Interpret PATTERN as fixed strings, not regular expressions.
+    #[arg(short = 'F', long = "fixed-strings")]
+    pub fixed_strings: bool,
+
+    /// Interpret PATTERN as a Perl-compatible regular expression (PCRE).
+    #[arg(short = 'P', long = "perl-regexp")]
+    pub perl_regexp: bool,
+
+    /// A pattern to search for (if -e or -f is not provided)
+    #[arg(required_unless_present_any = ["regexp", "file_patterns"])]
+    pub pattern: Option<String>,
 
     /// Files to search
-    #[arg(required = true)]
+    #[arg()]
     pub files: Vec<String>,
 }
 
