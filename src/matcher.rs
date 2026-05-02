@@ -69,6 +69,9 @@ mod tests {
             no_filename: false,
             with_filename: false,
             only_matching: false,
+            after_context: 0,
+            before_context: 0,
+            context: 0,
         }
     }
 

@@ -55,6 +55,18 @@ pub struct Config {
     #[arg(short = 'o', long = "only-matching")]
     pub only_matching: bool,
 
+    /// Print NUM lines of trailing context after matching lines.
+    #[arg(short = 'A', long = "after-context", default_value_t = 0)]
+    pub after_context: usize,
+
+    /// Print NUM lines of leading context before matching lines.
+    #[arg(short = 'B', long = "before-context", default_value_t = 0)]
+    pub before_context: usize,
+
+    /// Print NUM lines of output context.
+    #[arg(short = 'C', long = "context", default_value_t = 0)]
+    pub context: usize,
+
     /// The pattern to search for
     #[arg(required = true)]
     pub pattern: String,
@@ -67,5 +79,13 @@ pub struct Config {
 impl Config {
     pub fn parse_args(args: impl IntoIterator<Item = std::ffi::OsString>) -> clap::error::Result<Self> {
         Self::try_parse_from(args)
+    }
+
+    pub fn get_after_context(&self) -> usize {
+        std::cmp::max(self.after_context, self.context)
+    }
+
+    pub fn get_before_context(&self) -> usize {
+        std::cmp::max(self.before_context, self.context)
     }
 }
