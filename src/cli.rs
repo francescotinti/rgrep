@@ -23,6 +23,10 @@ pub struct Config {
     #[arg(short = 'w', long = "word-regexp")]
     pub word_regexp: bool,
 
+    /// Read all files under each directory, recursively
+    #[arg(short = 'r', long = "recursive")]
+    pub recursive: bool,
+
     /// The pattern to search for
     #[arg(required = true)]
     pub pattern: String,

@@ -46,6 +46,7 @@ mod tests {
             line_number: false,
             count: false,
             word_regexp: false,
+            recursive: false,
         }
     }
 
