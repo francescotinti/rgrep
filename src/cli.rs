@@ -91,6 +91,18 @@ pub struct Config {
     #[arg(short = 'P', long = "perl-regexp")]
     pub perl_regexp: bool,
 
+    /// Skip files matching GLOB.
+    #[arg(long = "exclude", action = clap::ArgAction::Append)]
+    pub exclude: Vec<String>,
+
+    /// Search only files that match GLOB.
+    #[arg(long = "include", action = clap::ArgAction::Append)]
+    pub include: Vec<String>,
+
+    /// Exclude directories matching GLOB.
+    #[arg(long = "exclude-dir", action = clap::ArgAction::Append)]
+    pub exclude_dir: Vec<String>,
+
     /// A pattern to search for (if -e or -f is not provided)
     #[arg(required_unless_present_any = ["regexp", "file_patterns"])]
     pub pattern: Option<String>,

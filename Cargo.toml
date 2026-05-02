@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 clap = { version = "4.6.1", features = ["derive"] }
+globset = "0.4.18"
 memmap2 = "0.9.10"
 regex = "1.12.3"
 walkdir = "2.5.0"

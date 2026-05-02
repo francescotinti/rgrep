@@ -163,6 +163,16 @@ fn process_file<R: BufRead>(
     Ok(())
 }
 
+use globset::{Glob, GlobSet, GlobSetBuilder};
+
+fn build_globset(patterns: &[String]) -> Result<GlobSet, Box<dyn Error>> {
+    let mut builder = GlobSetBuilder::new();
+    for p in patterns {
+        builder.add(Glob::new(p)?);
+    }
+    Ok(builder.build()?)
+}
+
 fn resolve_files(config: &Config) -> Result<Vec<String>, Box<dyn Error>> {
     let mut resolved_files = Vec::new();
 
@@ -171,6 +181,10 @@ fn resolve_files(config: &Config) -> Result<Vec<String>, Box<dyn Error>> {
     } else {
         config.files.clone()
     };
+
+    let include_set = build_globset(&config.include)?;
+    let exclude_set = build_globset(&config.exclude)?;
+    let exclude_dir_set = build_globset(&config.exclude_dir)?;
 
     for path in &files {
         if path == "-" {
@@ -182,8 +196,30 @@ fn resolve_files(config: &Config) -> Result<Vec<String>, Box<dyn Error>> {
         if let Ok(meta) = metadata {
             if meta.is_dir() {
                 if config.recursive {
-                    for entry in WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
+                    let mut it = WalkDir::new(path).into_iter();
+                    loop {
+                        let entry = match it.next() {
+                            None => break,
+                            Some(Err(_)) => continue,
+                            Some(Ok(entry)) => entry,
+                        };
+
+                        let file_name_os = entry.file_name();
+
+                        if entry.file_type().is_dir() {
+                            if !config.exclude_dir.is_empty() && exclude_dir_set.is_match(file_name_os) {
+                                it.skip_current_dir();
+                            }
+                            continue;
+                        }
+
                         if entry.file_type().is_file() {
+                            if !config.include.is_empty() && !include_set.is_match(file_name_os) {
+                                continue;
+                            }
+                            if !config.exclude.is_empty() && exclude_set.is_match(file_name_os) {
+                                continue;
+                            }
                             resolved_files.push(entry.path().to_string_lossy().into_owned());
                         }
                     }

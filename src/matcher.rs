@@ -102,6 +102,9 @@ mod tests {
             file_patterns: vec![],
             fixed_strings: false,
             perl_regexp: false,
+            exclude: vec![],
+            include: vec![],
+            exclude_dir: vec![],
         }
     }
 
