@@ -30,6 +30,14 @@ impl<'a> Matcher<'a> {
             matches
         }
     }
+
+    pub fn highlight(&self, line: &str) -> String {
+        if self.config.invert_match {
+            return line.to_string();
+        }
+        
+        self.re.replace_all(line, "\x1b[31;1m$0\x1b[0m").into_owned()
+    }
 }
 
 #[cfg(test)]
@@ -47,6 +55,7 @@ mod tests {
             count: false,
             word_regexp: false,
             recursive: false,
+            color: false,
         }
     }
 

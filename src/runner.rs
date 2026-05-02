@@ -28,7 +28,12 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
                 match_count += 1;
 
                 if !config.count {
-                    print_match(&config, &filename, multiple_files, line_number, &line);
+                    let output_line = if config.color {
+                        matcher.highlight(&line)
+                    } else {
+                        line.to_string()
+                    };
+                    print_match(&config, &filename, multiple_files, line_number, &output_line);
                 }
             }
             line_number += 1;

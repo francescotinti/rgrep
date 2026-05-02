@@ -27,6 +27,10 @@ pub struct Config {
     #[arg(short = 'r', long = "recursive")]
     pub recursive: bool,
 
+    /// Highlight matches in output
+    #[arg(long = "color")]
+    pub color: bool,
+
     /// The pattern to search for
     #[arg(required = true)]
     pub pattern: String,
