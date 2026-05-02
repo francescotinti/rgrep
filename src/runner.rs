@@ -8,39 +8,78 @@ use walkdir::WalkDir;
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let matcher = Matcher::new(&config)?;
     let files_to_search = resolve_files(&config)?;
-    let multiple_files = files_to_search.len() > 1;
+    
+    // By default, grep prints filename if there's more than one file, unless overriden.
+    let mut print_filename = files_to_search.len() > 1;
+    if config.no_filename {
+        print_filename = false;
+    }
+    if config.with_filename {
+        print_filename = true;
+    }
 
     for filename in files_to_search {
         let reader: Box<dyn BufRead> = if filename == "-" {
             Box::new(BufReader::new(io::stdin()))
         } else {
-            let file = File::open(&filename)?;
+            let file = match File::open(&filename) {
+                Ok(f) => f,
+                Err(e) => {
+                    eprintln!("rgrep: {}: {}", filename, e);
+                    continue;
+                }
+            };
             Box::new(BufReader::new(file))
         };
 
         let mut line_number = 1;
         let mut match_count = 0;
+        let mut has_match = false;
 
         for line_result in reader.lines() {
-            let line = line_result?;
+            let line = match line_result {
+                Ok(l) => l,
+                Err(_) => continue, // Ignore read errors for simplicity like grep binary mode
+            };
             
             if matcher.is_match(&line) {
+                has_match = true;
                 match_count += 1;
 
-                if !config.count {
+                if config.quiet {
+                    std::process::exit(0);
+                }
+
+                if config.files_with_matches || config.files_without_match || config.count {
+                    // Don't print lines if we only want file names or counts
+                } else if config.only_matching {
+                    let matches = matcher.find_matches(&line);
+                    for m in matches {
+                        let output = if config.color {
+                            format!("\x1b[31;1m{}\x1b[0m", m)
+                        } else {
+                            m
+                        };
+                        print_match(&config, &filename, print_filename, line_number, &output);
+                    }
+                } else {
                     let output_line = if config.color {
                         matcher.highlight(&line)
                     } else {
                         line.to_string()
                     };
-                    print_match(&config, &filename, multiple_files, line_number, &output_line);
+                    print_match(&config, &filename, print_filename, line_number, &output_line);
                 }
             }
             line_number += 1;
         }
 
-        if config.count {
-            if multiple_files {
+        if config.files_without_match && !has_match {
+            println!("{}", filename);
+        } else if config.files_with_matches && has_match {
+            println!("{}", filename);
+        } else if config.count {
+            if print_filename {
                 println!("{}:{}", filename, match_count);
             } else {
                 println!("{}", match_count);
@@ -83,12 +122,14 @@ fn resolve_files(config: &Config) -> Result<Vec<String>, Box<dyn Error>> {
     Ok(resolved_files)
 }
 
-fn print_match(config: &Config, filename: &str, multiple_files: bool, line_number: usize, line: &str) {
-    if multiple_files {
-        print!("{}:", filename);
+fn print_match(config: &Config, filename: &str, print_filename: bool, line_number: usize, line: &str) {
+    if print_filename {
+        let fname_col = if config.color { format!("\x1b[35m{}\x1b[36m:\x1b[0m", filename) } else { format!("{}:", filename) };
+        print!("{}", fname_col);
     }
     if config.line_number {
-        print!("{}:", line_number);
+        let lnum_col = if config.color { format!("\x1b[32m{}\x1b[36m:\x1b[0m", line_number) } else { format!("{}:", line_number) };
+        print!("{}", lnum_col);
     }
     println!("{}", line);
 }

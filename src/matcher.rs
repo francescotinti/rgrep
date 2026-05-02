@@ -38,6 +38,13 @@ impl<'a> Matcher<'a> {
         
         self.re.replace_all(line, "\x1b[31;1m$0\x1b[0m").into_owned()
     }
+
+    pub fn find_matches(&self, line: &str) -> Vec<String> {
+        if self.config.invert_match {
+            return vec![]; // -o doesn't usually make sense with -v, but we return empty for simplicity
+        }
+        self.re.find_iter(line).map(|m| m.as_str().to_string()).collect()
+    }
 }
 
 #[cfg(test)]
@@ -56,6 +63,12 @@ mod tests {
             word_regexp: false,
             recursive: false,
             color: false,
+            files_with_matches: false,
+            files_without_match: false,
+            quiet: false,
+            no_filename: false,
+            with_filename: false,
+            only_matching: false,
         }
     }
 

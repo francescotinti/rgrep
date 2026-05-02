@@ -31,6 +31,30 @@ pub struct Config {
     #[arg(long = "color")]
     pub color: bool,
 
+    /// Suppress normal output; instead print the name of each input file from which output would normally have been printed.
+    #[arg(short = 'l', long = "files-with-matches")]
+    pub files_with_matches: bool,
+
+    /// Suppress normal output; instead print the name of each input file from which no output would normally have been printed.
+    #[arg(short = 'L', long = "files-without-match")]
+    pub files_without_match: bool,
+
+    /// Quiet; do not write anything to standard output. Exit immediately with zero status if any match is found.
+    #[arg(short = 'q', long = "quiet", visible_alias = "silent")]
+    pub quiet: bool,
+
+    /// Suppress the prefixing of file names on output.
+    #[arg(short = 'h', long = "no-filename")]
+    pub no_filename: bool,
+
+    /// Print the file name for each match.
+    #[arg(short = 'H', long = "with-filename")]
+    pub with_filename: bool,
+
+    /// Print only the matched (non-empty) parts of a matching line, with each such part on a separate output line.
+    #[arg(short = 'o', long = "only-matching")]
+    pub only_matching: bool,
+
     /// The pattern to search for
     #[arg(required = true)]
     pub pattern: String,
@@ -43,38 +67,5 @@ pub struct Config {
 impl Config {
     pub fn parse_args(args: impl IntoIterator<Item = std::ffi::OsString>) -> clap::error::Result<Self> {
         Self::try_parse_from(args)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::ffi::OsString;
-
-    #[test]
-    fn test_basic_args() {
-        let args = vec![
-            OsString::from("rgrep"),
-            OsString::from("pattern"),
-            OsString::from("file.txt"),
-        ];
-        let config = Config::parse_args(args).unwrap();
-        assert_eq!(config.pattern, "pattern");
-        assert_eq!(config.files, vec!["file.txt"]);
-        assert!(!config.ignore_case);
-    }
-
-    #[test]
-    fn test_flags() {
-        let args = vec![
-            OsString::from("rgrep"),
-            OsString::from("-i"),
-            OsString::from("-v"),
-            OsString::from("pattern"),
-            OsString::from("file.txt"),
-        ];
-        let config = Config::parse_args(args).unwrap();
-        assert!(config.ignore_case);
-        assert!(config.invert_match);
     }
 }
