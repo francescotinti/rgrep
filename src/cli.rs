@@ -67,6 +67,14 @@ pub struct Config {
     #[arg(short = 'C', long = "context", default_value_t = 0)]
     pub context: usize,
 
+    /// Stop reading a file after NUM matching lines.
+    #[arg(short = 'm', long = "max-count")]
+    pub max_count: Option<usize>,
+
+    /// Use memory-mapped I/O to read input files if possible.
+    #[arg(long = "mmap")]
+    pub mmap: bool,
+
     /// The pattern to search for
     #[arg(required = true)]
     pub pattern: String,

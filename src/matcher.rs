@@ -72,6 +72,8 @@ mod tests {
             after_context: 0,
             before_context: 0,
             context: 0,
+            max_count: None,
+            mmap: false,
         }
     }
 
