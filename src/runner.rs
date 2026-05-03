@@ -289,7 +289,9 @@ fn resolve_files(config: &Config, extra_files: Vec<String>) -> Result<(Vec<Strin
     if let Some(f) = &config.exclude_from {
         if let Ok(content) = fs::read_to_string(f) {
             for line in content.lines() {
-                exclude_patterns.push(line.to_string());
+                if !line.is_empty() {
+                    exclude_patterns.push(line.to_string());
+                }
             }
         } else {
             if !config.no_messages {
@@ -433,5 +435,45 @@ mod tests {
         assert_eq!(pats, vec!["foo", "bar"]);
         
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_build_globset() {
+        let set = build_globset(&["*.rs".to_string(), "*.toml".to_string()]).unwrap();
+        assert!(set.is_match("main.rs"));
+        assert!(set.is_match("Cargo.toml"));
+        assert!(!set.is_match("README.md"));
+    }
+
+    #[test]
+    fn test_exclude_from_parsing() {
+        let content = "*.log\n\n#comment.txt\n";
+        let mut patterns = Vec::new();
+        for line in content.lines() {
+            if !line.is_empty() {
+                patterns.push(line.to_string());
+            }
+        }
+        assert_eq!(patterns, vec!["*.log", "#comment.txt"]);
+    }
+
+    #[test]
+    fn test_filter_combination() {
+        let include_set = build_globset(&["*.txt".to_string()]).unwrap();
+        let exclude_set = build_globset(&["ignore.txt".to_string()]).unwrap();
+
+        let check_file = |name: &str| -> bool {
+            if !include_set.is_empty() && !include_set.is_match(name) {
+                return false;
+            }
+            if !exclude_set.is_empty() && exclude_set.is_match(name) {
+                return false;
+            }
+            true
+        };
+
+        assert!(check_file("test.txt"));
+        assert!(!check_file("test.log"));
+        assert!(!check_file("ignore.txt"));
     }
 }

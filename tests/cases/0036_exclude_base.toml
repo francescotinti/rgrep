@@ -1,0 +1,14 @@
+name = "exclude base"
+args = ["-r", "--exclude=*.log", "foo", "{FIXTURES}/dir"]
+stdin = ""
+expected_stdout = "{FIXTURES}/dir/a.txt:foo\n"
+expected_exit_code = 0
+sort_output = true
+
+[[fixture_files]]
+name = "dir/a.txt"
+content = "foo\n"
+
+[[fixture_files]]
+name = "dir/b.log"
+content = "foo\n"

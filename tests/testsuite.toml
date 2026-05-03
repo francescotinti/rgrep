@@ -33,4 +33,9 @@ cases = [
     "cases/0032_directory_skip.toml",
     "cases/0033_directory_recurse.toml",
     "cases/0034_nonexistent_directory.toml",
+    "cases/0035_include_base.toml",
+    "cases/0036_exclude_base.toml",
+    "cases/0037_exclude_dir.toml",
+    "cases/0038_exclude_from.toml",
+    "cases/0039_combination.toml",
 ]
