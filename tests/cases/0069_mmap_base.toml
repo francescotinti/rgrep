@@ -1,0 +1,9 @@
+name = "--mmap base"
+args = ["--mmap", "foo", "{FIXTURES}/file.txt"]
+stdin = ""
+expected_stdout = "foo\nfoo\n"
+expected_exit_code = 0
+
+[[fixture_files]]
+name = "file.txt"
+content = "foo\nbar\nfoo\n"
