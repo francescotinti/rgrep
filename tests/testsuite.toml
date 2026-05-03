@@ -57,4 +57,9 @@ cases = [
     "cases/0056_binary_without_match.toml",
     "cases/0057_binary_files_text.toml",
     "cases/0058_binary_files_binary.toml",
+    "cases/0059_null_data.toml",
+    "cases/0060_null_filename.toml",
+    "cases/0061_null_data_only_matching.toml",
+    "cases/0062_null_filename_files_with_matches.toml",
+    "cases/0063_null_data_cross_file.toml",
 ]

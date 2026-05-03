@@ -427,7 +427,6 @@ fn resolve_files(config: &Config, extra_files: Vec<String>) -> Result<(Vec<Strin
 fn print_line(config: &Config, filename: &str, print_filename: bool, line_number: usize, byte_offset: usize, line: &str, is_match: bool, color_enabled: bool, colors: &GrepColors) {
     let sep = if is_match { ":" } else { "-" };
     let sep_col = if color_enabled { ansi_wrap(sep, &colors.se) } else { sep.to_string() };
-    let null_sep = "\0";
 
     let mut stdout = io::stdout();
     

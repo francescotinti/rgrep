@@ -1,0 +1,15 @@
+name = "-z null data cross file"
+args = ["-z", "foo", "{FIXTURES}/a.txt", "{FIXTURES}/b.txt"]
+stdin = ""
+expected_stdout = "{FIXTURES}/a.txt:foo\nbar\u0000{FIXTURES}/b.txt:foo\n\u0000"
+expected_exit_code = 0
+skip_if_bsd = true
+skip_reason = "BSD grep is inconsistent with -z output terminators at EOF"
+
+[[fixture_files]]
+name = "a.txt"
+content = "foo\nbar\u0000baz"
+
+[[fixture_files]]
+name = "b.txt"
+content = "foo\n"

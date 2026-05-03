@@ -1,0 +1,7 @@
+name = "-z with -o"
+args = ["-z", "-o", "foo"]
+stdin = "foo\nbar\u0000baz\n"
+expected_stdout = "foo\u0000"
+expected_exit_code = 0
+skip_if_bsd = true
+skip_reason = "BSD grep hardcodes \\n for -o even with -z"

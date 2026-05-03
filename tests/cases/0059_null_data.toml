@@ -1,0 +1,5 @@
+name = "-z null data"
+args = ["-z", "foo"]
+stdin = "foo\nbar\u0000baz\n"
+expected_stdout = "foo\nbar\u0000"
+expected_exit_code = 0

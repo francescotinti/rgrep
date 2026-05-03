@@ -1,0 +1,15 @@
+name = "-Z null filename"
+args = ["-Z", "foo", "{FIXTURES}/a.txt", "{FIXTURES}/b.txt"]
+stdin = ""
+expected_stdout = "{FIXTURES}/a.txt\u0000foo\n{FIXTURES}/b.txt\u0000foo\n"
+expected_exit_code = 0
+skip_if_bsd = true
+skip_reason = "BSD grep does not support -Z for null filename (treats as decompress)"
+
+[[fixture_files]]
+name = "a.txt"
+content = "foo\n"
+
+[[fixture_files]]
+name = "b.txt"
+content = "foo\n"
