@@ -51,7 +51,7 @@ fn is_bsd_grep() -> bool {
     let version_str = String::from_utf8_lossy(&output.stdout);
     let version_err = String::from_utf8_lossy(&output.stderr);
     
-    !version_str.contains("GNU") && !version_err.contains("GNU")
+    version_str.contains("BSD grep") || (!version_str.contains("GNU") && !version_err.contains("GNU"))
 }
 
 fn run_command_with_stdin(cmd: &str, args: &[String], stdin_data: &str, env: Option<&std::collections::HashMap<String, String>>) -> (i32, String, String) {
