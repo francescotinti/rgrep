@@ -1,0 +1,6 @@
+name = "gnu backref seq3"
+args = ["-e", "a\\(.\\)", "-e", "b\\1"]
+stdin = "123\n"
+expected_stdout = ""
+expected_exit_code = 2
+source = "gnu-grep/tests/backref"

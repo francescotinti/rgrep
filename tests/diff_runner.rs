@@ -112,6 +112,8 @@ fn test_differential() {
     
     let rgrep_bin = env!("CARGO_BIN_EXE_rgrep");
 
+    let mut failures = Vec::new();
+
     for case_path in testsuite.cases {
         let case_content = fs::read_to_string(Path::new("tests").join(&case_path))
             .unwrap_or_else(|_| panic!("Failed to read {}", case_path));
@@ -204,13 +206,17 @@ fn test_differential() {
         }
 
         if outcome != DiffOutcome::Match {
-            panic!(
-                "Test '{}' failed! Outcome: {:?}\nArgs: {:?}\nExpected Code: {}\nOracle Code: {}\nRgrep Code: {}\nOracle Stdout:\n{}\nRgrep Stdout:\n{}\nRgrep Stderr:\n{}",
-                case.name, outcome, processed_args, case.expected_exit_code, oracle_code, rgrep_code, oracle_stdout, rgrep_stdout, rgrep_stderr
-            );
+            failures.push(format!(
+                "Test '{}' ({}) failed! Outcome: {:?}\nArgs: {:?}\nExpected Code: {}\nOracle Code: {}\nRgrep Code: {}\nOracle Stdout:\n{}\nRgrep Stdout:\n{}\nRgrep Stderr:\n{}",
+                case.name, case_path, outcome, processed_args, case.expected_exit_code, oracle_code, rgrep_code, oracle_stdout, rgrep_stdout, rgrep_stderr
+            ));
+            continue;
         }
         
-        assert_eq!(oracle_code, case.expected_exit_code, "Oracle grep produced unexpected exit code");
+        if oracle_code != case.expected_exit_code {
+            failures.push(format!("Test '{}' ({}) Oracle grep produced unexpected exit code. Expected {}, got {}", case.name, case_path, case.expected_exit_code, oracle_code));
+            continue;
+        }
         
         let mut final_oracle = oracle_stdout.clone();
         let mut final_expected = processed_expected.clone();
@@ -226,6 +232,16 @@ fn test_differential() {
             if !final_expected.is_empty() { final_expected.push('\n'); }
         }
         
-        assert_eq!(final_oracle, final_expected, "Oracle grep produced unexpected output");
+        if final_oracle != final_expected {
+            failures.push(format!("Test '{}' ({}) Oracle grep produced unexpected output", case.name, case_path));
+        }
+    }
+
+    if !failures.is_empty() {
+        for f in &failures {
+            eprintln!("{}", f);
+            eprintln!("--------------------------------------------------");
+        }
+        panic!("{} differential tests failed!", failures.len());
     }
 }

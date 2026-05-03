@@ -1,0 +1,6 @@
+name = "gnu options seq3"
+args = ["-F", "-e", "c\\{3\\}"]
+stdin = "abababccccccd\n"
+expected_stdout = ""
+expected_exit_code = 1
+source = "gnu-grep/tests/options"

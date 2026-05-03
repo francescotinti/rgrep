@@ -1,0 +1,6 @@
+name = "gnu options seq4"
+args = ["-e", "^hello", "-e", "hello$"]
+stdin = "abchelloabc\n"
+expected_stdout = ""
+expected_exit_code = 1
+source = "gnu-grep/tests/options"

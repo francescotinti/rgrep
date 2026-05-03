@@ -1,0 +1,6 @@
+name = "gnu file seq2"
+args = ["-G", "-f", "patfile"]
+stdin = "GNU\n"
+expected_stdout = ""
+expected_exit_code = 2
+source = "gnu-grep/tests/file"

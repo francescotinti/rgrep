@@ -1,0 +1,6 @@
+name = "gnu file seq3"
+args = ["-F", "-f", "patfile"]
+stdin = "ridar\n"
+expected_stdout = ""
+expected_exit_code = 2
+source = "gnu-grep/tests/file"

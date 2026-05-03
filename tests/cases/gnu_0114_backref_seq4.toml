@@ -1,0 +1,9 @@
+name = "gnu backref seq4"
+args = ["-e", "[", "-e", "]"]
+stdin = "123\n"
+expected_stdout = ""
+expected_exit_code = 2
+source = "gnu-grep/tests/backref"
+
+expected_to_fail = true
+expected_to_fail_reason = "Bug: multiple -e concatenated with | can mask syntax errors (D-NEW-5)"

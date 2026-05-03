@@ -1,0 +1,9 @@
+name = "gnu backref seq2"
+args = ["-E", "-e", "^(.?)(.?)(.?)(.?)(.?)(.?)(.?)(.?)(.).?\\9\\8\\7\\6\\5\\4\\3\\2\\1$"]
+stdin = "civic\n"
+expected_stdout = "civic\n"
+expected_exit_code = 0
+source = "gnu-grep/tests/backref"
+
+expected_to_fail = true
+expected_to_fail_reason = "Backreferences not supported by regex crate (D-M6)"

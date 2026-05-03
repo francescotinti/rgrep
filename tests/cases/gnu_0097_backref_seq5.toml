@@ -1,0 +1,9 @@
+name = "gnu backref seq5"
+args = ["-e", "^Total failed: 0$", "-e", "^Total failed: \\([0-9]*\\) (\\1 ignored)$"]
+stdin = "Total failed: 2 (1 ignored)\n"
+expected_stdout = ""
+expected_exit_code = 1
+source = "gnu-grep/tests/backref"
+
+expected_to_fail = true
+expected_to_fail_reason = "Backreferences not supported by regex crate (D-M6)"

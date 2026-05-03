@@ -1,0 +1,6 @@
+name = "gnu status seq2"
+args = ["-E", "-e", "zbc"]
+stdin = "abcd\n"
+expected_stdout = ""
+expected_exit_code = 1
+source = "gnu-grep/tests/status"

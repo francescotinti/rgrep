@@ -1,0 +1,9 @@
+name = "gnu backref seq1"
+args = ["-e", "\\(.\\)\\(.\\).\\2\\1"]
+stdin = "radar\n"
+expected_stdout = "radar\n"
+expected_exit_code = 0
+source = "gnu-grep/tests/backref"
+
+expected_to_fail = true
+expected_to_fail_reason = "Backreferences not supported by regex crate (D-M6)"

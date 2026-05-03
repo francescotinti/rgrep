@@ -1,0 +1,6 @@
+name = "gnu status seq3"
+args = ["-E", "-q", "-s", "abc", "MMMMMMMM.MMM", "-"]
+stdin = "abcd\n"
+expected_stdout = ""
+expected_exit_code = 0
+source = "gnu-grep/tests/status"
