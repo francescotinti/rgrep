@@ -1,0 +1,7 @@
+name = "invalid regex exit 2"
+args = ["-E", "["]
+stdin = "irrelevant\n"
+expected_stdout = ""
+expected_exit_code = 2
+skip_if_bsd = true
+skip_reason = "BSD grep might exit with 1 instead of 2 for invalid regex"

@@ -7,6 +7,6 @@ fn main() {
     
     if let Err(e) = rgrep::runner::run(config) {
         eprintln!("rgrep: {}", e);
-        process::exit(1);
+        process::exit(2);
     }
 }

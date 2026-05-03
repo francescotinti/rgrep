@@ -4,4 +4,10 @@ cases = [
     "cases/0003_ignore_case.toml",
     "cases/0004_invert_match.toml",
     "cases/0005_count.toml",
+    "cases/0006_extended_regex.toml",
+    "cases/0007_basic_regex_bre.toml",
+    "cases/0008_fixed_string.toml",
+    "cases/0009_invalid_regex_exit2.toml",
+    "cases/0010_fixed_string_word.toml",
+    "cases/0011_perl_regexp_unsupported.toml",
 ]

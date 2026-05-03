@@ -1,0 +1,5 @@
+name = "fixed string word"
+args = ["-Fw", "foo"]
+stdin = "foo\nfoobar\nbar\n"
+expected_stdout = "foo\n"
+expected_exit_code = 0

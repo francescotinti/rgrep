@@ -1,10 +1,49 @@
 use crate::cli::Config;
+use aho_corasick::{AhoCorasick, AhoCorasickBuilder};
 use regex::{Regex, RegexBuilder};
 use std::error::Error;
 
+pub enum Engine {
+    Regex(Regex),
+    AhoCorasick(AhoCorasick),
+}
+
 pub struct Matcher<'a> {
     config: &'a Config,
-    re: Regex,
+    engine: Engine,
+}
+
+pub fn bre_to_ere(pattern: &str) -> String {
+    let mut ere = String::with_capacity(pattern.len());
+    let mut chars = pattern.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            if let Some(&next) = chars.peek() {
+                match next {
+                    '?' | '+' | '(' | ')' | '{' | '}' | '|' => {
+                        ere.push(next);
+                        chars.next();
+                    }
+                    _ => {
+                        ere.push('\\');
+                    }
+                }
+            } else {
+                ere.push('\\');
+            }
+        } else {
+            match c {
+                '?' | '+' | '(' | ')' | '{' | '}' | '|' => {
+                    ere.push('\\');
+                    ere.push(c);
+                }
+                _ => {
+                    ere.push(c);
+                }
+            }
+        }
+    }
+    ere
 }
 
 impl<'a> Matcher<'a> {
@@ -26,13 +65,35 @@ impl<'a> Matcher<'a> {
             }
         }
         
-        let final_patterns: Vec<String> = if config.fixed_strings {
-            raw_patterns.into_iter().map(|p| regex::escape(&p)).collect()
+        let is_basic = config.basic_regexp || (!config.extended_regexp && !config.fixed_strings && !config.perl_regexp);
+        
+        let final_patterns: Vec<String> = if is_basic {
+            raw_patterns.into_iter().map(|p| bre_to_ere(&p)).collect()
         } else {
             raw_patterns
         };
         
-        let mut combined = final_patterns.join("|");
+        let ignore_case = config.ignore_case && !config.no_ignore_case;
+        
+        if config.perl_regexp {
+            return Err("-P only supported when compiled with --features perl-regexp".into());
+        }
+        
+        if config.fixed_strings && !config.word_regexp && !config.line_regexp {
+            let ac = AhoCorasickBuilder::new()
+                .ascii_case_insensitive(ignore_case)
+                .build(&final_patterns)
+                .map_err(|e| Box::<dyn Error>::from(format!("{}", e)))?;
+            return Ok(Self { config, engine: Engine::AhoCorasick(ac) });
+        }
+        
+        let final_patterns_escaped: Vec<String> = if config.fixed_strings {
+            final_patterns.into_iter().map(|p| regex::escape(&p)).collect()
+        } else {
+            final_patterns
+        };
+        
+        let mut combined = final_patterns_escaped.join("|");
         
         if config.line_regexp {
             combined = format!(r"^(?:{})$", combined);
@@ -40,17 +101,19 @@ impl<'a> Matcher<'a> {
             combined = format!(r"\b(?:{})\b", combined);
         }
         
-        let ignore_case = config.ignore_case && !config.no_ignore_case;
-        
         let re = RegexBuilder::new(&combined)
             .case_insensitive(ignore_case)
-            .build()?;
+            .build()
+            .map_err(|e| Box::<dyn Error>::from(format!("{}", e)))?;
 
-        Ok(Self { config, re })
+        Ok(Self { config, engine: Engine::Regex(re) })
     }
 
     pub fn is_match(&self, line: &str) -> bool {
-        let matches = self.re.is_match(line);
+        let matches = match &self.engine {
+            Engine::Regex(re) => re.is_match(line),
+            Engine::AhoCorasick(ac) => ac.is_match(line),
+        };
 
         if self.config.invert_match {
             !matches
@@ -64,14 +127,32 @@ impl<'a> Matcher<'a> {
             return line.to_string();
         }
         
-        self.re.replace_all(line, "\x1b[31;1m$0\x1b[0m").into_owned()
+        match &self.engine {
+            Engine::Regex(re) => re.replace_all(line, "\x1b[31;1m$0\x1b[0m").into_owned(),
+            Engine::AhoCorasick(ac) => {
+                let mut result = String::with_capacity(line.len());
+                let mut last_match = 0;
+                for mat in ac.find_iter(line) {
+                    result.push_str(&line[last_match..mat.start()]);
+                    result.push_str("\x1b[31;1m");
+                    result.push_str(&line[mat.start()..mat.end()]);
+                    result.push_str("\x1b[0m");
+                    last_match = mat.end();
+                }
+                result.push_str(&line[last_match..]);
+                result
+            }
+        }
     }
 
     pub fn find_matches(&self, line: &str) -> Vec<String> {
         if self.config.invert_match {
             return vec![]; 
         }
-        self.re.find_iter(line).map(|m| m.as_str().to_string()).collect()
+        match &self.engine {
+            Engine::Regex(re) => re.find_iter(line).map(|m| m.as_str().to_string()).collect(),
+            Engine::AhoCorasick(ac) => ac.find_iter(line).map(|m| line[m.start()..m.end()].to_string()).collect(),
+        }
     }
 }
 
@@ -79,6 +160,15 @@ impl<'a> Matcher<'a> {
 mod tests {
     use super::*;
     use crate::cli::Config;
+
+    #[test]
+    fn test_bre_to_ere() {
+        assert_eq!(bre_to_ere("foo\\?"), "foo?");
+        assert_eq!(bre_to_ere("foo?"), "foo\\?");
+        assert_eq!(bre_to_ere("\\(a\\|b\\)"), "(a|b)");
+        assert_eq!(bre_to_ere("(a|b)"), "\\(a\\|b\\)");
+        assert_eq!(bre_to_ere("^foo$"), "^foo$");
+    }
 
     fn get_base_config(pattern: &str) -> Config {
         Config {

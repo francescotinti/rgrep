@@ -4,11 +4,11 @@ use clap::Parser;
 #[command(author, version, about = "A Rust implementation of GNU grep", disable_help_flag = true)]
 pub struct Config {
     /// Interpret PATTERNS as extended regular expressions.
-    #[arg(short = 'E', long = "extended-regexp")]
+    #[arg(short = 'E', long = "extended-regexp", overrides_with_all = ["basic_regexp", "fixed_strings", "perl_regexp"])]
     pub extended_regexp: bool,
 
     /// Interpret PATTERNS as basic regular expressions.
-    #[arg(short = 'G', long = "basic-regexp")]
+    #[arg(short = 'G', long = "basic-regexp", overrides_with_all = ["extended_regexp", "fixed_strings", "perl_regexp"])]
     pub basic_regexp: bool,
 
     /// Ignore case distinctions in patterns and input data
@@ -124,11 +124,11 @@ pub struct Config {
     pub file_patterns: Vec<String>,
 
     /// Interpret PATTERN as fixed strings, not regular expressions.
-    #[arg(short = 'F', long = "fixed-strings")]
+    #[arg(short = 'F', long = "fixed-strings", overrides_with_all = ["extended_regexp", "basic_regexp", "perl_regexp"])]
     pub fixed_strings: bool,
 
     /// Interpret PATTERN as a Perl-compatible regular expression (PCRE).
-    #[arg(short = 'P', long = "perl-regexp")]
+    #[arg(short = 'P', long = "perl-regexp", overrides_with_all = ["extended_regexp", "basic_regexp", "fixed_strings"])]
     pub perl_regexp: bool,
 
     /// Skip files matching GLOB.

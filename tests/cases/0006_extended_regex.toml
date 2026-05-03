@@ -1,0 +1,5 @@
+name = "extended regex"
+args = ["-E", "foo|bar"]
+stdin = "foo\nbaz\nbar\nfoobar\n"
+expected_stdout = "foo\nbar\nfoobar\n"
+expected_exit_code = 0

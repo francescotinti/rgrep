@@ -1,0 +1,5 @@
+name = "basic regex bre"
+args = ["-G", "foo\\?"]
+stdin = "foo?\nfoo\nfo\n"
+expected_stdout = "foo?\nfoo\nfo\n"
+expected_exit_code = 0

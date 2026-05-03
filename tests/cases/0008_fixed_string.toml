@@ -1,0 +1,5 @@
+name = "fixed string"
+args = ["-F", "a.b"]
+stdin = "a.b\naxb\n"
+expected_stdout = "a.b\n"
+expected_exit_code = 0
