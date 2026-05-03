@@ -3,7 +3,8 @@ args = ["--color=always", "foo"]
 stdin = "foo\n"
 expected_stdout = "\u001b[1;33m\u001b[Kfoo\u001b[m\u001b[K\n"
 expected_exit_code = 0
-expected_to_fail = true
+skip_if_bsd = true
+skip_reason = "ugrep does not honor GREP_COLORS env var (rgrep correctly does)"
 
 [env]
 GREP_COLORS = "ms=1;33"
