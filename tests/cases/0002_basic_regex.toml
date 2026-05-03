@@ -1,0 +1,5 @@
+name = "regex anchor"
+args = ["^bar"]
+stdin = "foo\nbar\nbar baz\n"
+expected_stdout = "bar\nbar baz\n"
+expected_exit_code = 0

@@ -1,0 +1,5 @@
+name = "invert match"
+args = ["-v", "foo"]
+stdin = "foo\nbar\nbaz\n"
+expected_stdout = "bar\nbaz\n"
+expected_exit_code = 0

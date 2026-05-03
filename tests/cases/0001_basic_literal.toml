@@ -1,0 +1,5 @@
+name = "basic literal match"
+args = ["foo"]
+stdin = "foo\nbar\nfoo bar\n"
+expected_stdout = "foo\nfoo bar\n"
+expected_exit_code = 0

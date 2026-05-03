@@ -1,0 +1,5 @@
+name = "case-insensitive"
+args = ["-i", "FOO"]
+stdin = "Foo\nfoo\nbar\n"
+expected_stdout = "Foo\nfoo\n"
+expected_exit_code = 0

@@ -1,7 +1,7 @@
 use clap::Parser;
 
 #[derive(Parser, Debug, PartialEq)]
-#[command(author, version, about = "A Rust implementation of GNU grep")]
+#[command(author, version, about = "A Rust implementation of GNU grep", disable_help_flag = true)]
 pub struct Config {
     /// Interpret PATTERNS as extended regular expressions.
     #[arg(short = 'E', long = "extended-regexp")]

@@ -1,0 +1,5 @@
+name = "count"
+args = ["-c", "foo"]
+stdin = "foo\nbar\nfoo\n"
+expected_stdout = "2\n"
+expected_exit_code = 0

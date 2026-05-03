@@ -1,0 +1,7 @@
+cases = [
+    "cases/0001_basic_literal.toml",
+    "cases/0002_basic_regex.toml",
+    "cases/0003_ignore_case.toml",
+    "cases/0004_invert_match.toml",
+    "cases/0005_count.toml",
+]
