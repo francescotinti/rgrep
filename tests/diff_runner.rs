@@ -1,3 +1,12 @@
+// rgrep — GNU grep ported to Rust (differential test harness)
+// Copyright (c) 2026 Francesco Tinti <francesco.tinti@activemind.it>
+//
+// AI-assisted port:
+//   Architect: Claude Opus 4.7 (1M context, Anthropic)
+//   Implementer: Gemini Antigravity (Google)
+//
+// https://github.com/francescotinti/rgrep
+
 use serde::Deserialize;
 use std::fs;
 use std::io::Write;

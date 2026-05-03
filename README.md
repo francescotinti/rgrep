@@ -1,5 +1,8 @@
 # rgrep 🦀
 
+> Copyright (c) 2026 Francesco Tinti <francesco.tinti@activemind.it>
+> AI-assisted port — Architect: Claude Opus 4.7 (Anthropic) · Implementer: Gemini Antigravity (Google)
+
 `rgrep` is a modern, modular, and blazingly fast clone of the original **GNU grep**, completely rewritten in **Rust**. 
 
 This project started as an educational experiment to translate a minimal 30-line C implementation of grep into Rust, and iteratively evolved into a 100% compliant, feature-rich text search engine capable of matching almost all major GNU grep functionalities.

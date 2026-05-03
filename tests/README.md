@@ -1,5 +1,9 @@
 # Adding a new testcase
 
+> rgrep — Copyright (c) 2026 Francesco Tinti <francesco.tinti@activemind.it>
+> AI-assisted port: Claude Opus 4.7 (Anthropic) + Gemini Antigravity (Google)
+
+
 1. Create a new TOML file in `cases/` with a zero-padded 4-digit ID (e.g., `0006_name.toml`).
 2. Follow this structure:
 ```toml
