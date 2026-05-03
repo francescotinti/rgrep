@@ -1,0 +1,9 @@
+name = "--binary-files=text"
+args = ["--binary-files=text", "foo", "{FIXTURES}/bin.dat"]
+stdin = ""
+expected_stdout = "foo\u0000bar\n"
+expected_exit_code = 0
+
+[[fixture_files]]
+name = "bin.dat"
+content = "foo\u0000bar\n"

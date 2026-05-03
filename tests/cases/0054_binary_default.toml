@@ -1,0 +1,9 @@
+name = "binary detection default"
+args = ["foo", "{FIXTURES}/bin.dat"]
+stdin = ""
+expected_stdout = "Binary file {FIXTURES}/bin.dat matches\n"
+expected_exit_code = 0
+
+[[fixture_files]]
+name = "bin.dat"
+content = "foo\u0000bar\n"

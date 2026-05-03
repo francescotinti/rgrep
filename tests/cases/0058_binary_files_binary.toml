@@ -1,0 +1,9 @@
+name = "--binary-files=binary on text"
+args = ["--binary-files=binary", "foo", "{FIXTURES}/text.txt"]
+stdin = ""
+expected_stdout = "foo\n"
+expected_exit_code = 0
+
+[[fixture_files]]
+name = "text.txt"
+content = "foo\n"

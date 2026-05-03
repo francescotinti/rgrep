@@ -12,6 +12,12 @@ pub enum DevicesAction {
     Read,
     Skip,
 }
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum BinaryAction {
+    Binary,
+    Text,
+    WithoutMatch,
+}
 
 #[derive(Parser, Debug, PartialEq)]
 #[command(author, version, about = "A Rust implementation of GNU grep", disable_help_flag = true)]
@@ -176,6 +182,10 @@ pub struct Config {
     #[arg(short = 'a', long = "text")]
     pub text: bool,
 
+    /// Process a binary file as if it did not contain matching data.
+    #[arg(short = 'I')]
+    pub without_match: bool,
+
     /// Treat binary files as TYPE (binary, text, without-match).
     #[arg(long = "binary-files")]
     pub binary_files: Option<String>,
@@ -216,6 +226,24 @@ impl Config {
 
     pub fn get_before_context(&self) -> usize {
         std::cmp::max(self.before_context, self.context)
+    }
+
+    pub fn get_binary_action(&self) -> BinaryAction {
+        if let Some(bf) = &self.binary_files {
+            match bf.as_str() {
+                "text" => return BinaryAction::Text,
+                "without-match" => return BinaryAction::WithoutMatch,
+                "binary" => return BinaryAction::Binary,
+                _ => return BinaryAction::Binary, // Default if invalid
+            }
+        }
+        if self.text {
+            return BinaryAction::Text;
+        }
+        if self.without_match {
+            return BinaryAction::WithoutMatch;
+        }
+        BinaryAction::Binary
     }
 }
 

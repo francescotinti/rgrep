@@ -52,4 +52,9 @@ cases = [
     "cases/0051_no_messages.toml",
     "cases/0052_no_match_exit.toml",
     "cases/0053_missing_file_exit.toml",
+    "cases/0054_binary_default.toml",
+    "cases/0055_binary_force_text.toml",
+    "cases/0056_binary_without_match.toml",
+    "cases/0057_binary_files_text.toml",
+    "cases/0058_binary_files_binary.toml",
 ]

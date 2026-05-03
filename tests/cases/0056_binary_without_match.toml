@@ -1,0 +1,13 @@
+name = "-I without-match"
+args = ["-I", "foo", "{FIXTURES}/bin.dat", "{FIXTURES}/text.txt"]
+stdin = ""
+expected_stdout = "{FIXTURES}/text.txt:foo\n"
+expected_exit_code = 0
+
+[[fixture_files]]
+name = "bin.dat"
+content = "foo\u0000\n"
+
+[[fixture_files]]
+name = "text.txt"
+content = "foo\n"

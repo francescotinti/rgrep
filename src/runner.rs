@@ -160,6 +160,20 @@ fn process_file<R: BufRead>(
 
     let mut buffer = Vec::new();
 
+    let binary_action = config.get_binary_action();
+    let mut is_binary = false;
+    
+    if binary_action != crate::cli::BinaryAction::Text {
+        if let Ok(buf) = reader.fill_buf() {
+            if buf.contains(&0) {
+                is_binary = true;
+                if binary_action == crate::cli::BinaryAction::WithoutMatch {
+                    return Ok(false);
+                }
+            }
+        }
+    }
+
     loop {
         buffer.clear();
         let bytes_read = match reader.read_until(delimiter, &mut buffer) {
@@ -179,7 +193,7 @@ fn process_file<R: BufRead>(
             line_str = &line_str[..line_str.len() - 1];
         }
         
-        if delimiter == b'\n' && line_str.ends_with('\r') {
+        if !config.binary && delimiter == b'\n' && line_str.ends_with('\r') {
             line_str = &line_str[..line_str.len() - 1];
         }
 
@@ -202,6 +216,15 @@ fn process_file<R: BufRead>(
 
             if config.quiet {
                 return Ok(true);
+            }
+
+            if is_binary {
+                if config.count || config.files_with_matches || config.files_without_match {
+                    break;
+                } else {
+                    println!("Binary file {} matches", if filename == "-" { "(standard input)" } else { filename });
+                    return Ok(true);
+                }
             }
 
             if config.files_with_matches || config.files_without_match {
