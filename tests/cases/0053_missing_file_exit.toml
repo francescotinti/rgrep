@@ -1,0 +1,5 @@
+name = "missing file exit code"
+args = ["foo", "/nonexistent/file"]
+stdin = ""
+expected_stdout = ""
+expected_exit_code = 2

@@ -1,0 +1,5 @@
+name = "-q match"
+args = ["-q", "foo"]
+stdin = "foo\n"
+expected_stdout = ""
+expected_exit_code = 0

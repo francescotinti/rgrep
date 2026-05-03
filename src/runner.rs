@@ -33,7 +33,13 @@ pub fn load_pattern_file(path: &str) -> Result<Vec<String>, Box<dyn Error>> {
     Ok(patterns)
 }
 
-pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
+#[derive(Debug, PartialEq)]
+pub enum RunResult {
+    MatchFound,
+    NoMatch,
+}
+
+pub fn run(config: Config) -> Result<RunResult, Box<dyn Error>> {
     let mut raw_patterns = Vec::new();
 
     for p in &config.regexp {
@@ -73,10 +79,17 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     };
     let colors = GrepColors::from_env();
 
+    let mut any_match = false;
+
     for filename in files_to_search {
         if filename == "-" {
             let reader = BufReader::new(io::stdin());
-            process_file(&config, &matcher, reader, &config.label, print_filename, color_enabled, &colors)?;
+            if process_file(&config, &matcher, reader, &config.label, print_filename, color_enabled, &colors)? {
+                any_match = true;
+                if config.quiet {
+                    return Ok(RunResult::MatchFound);
+                }
+            }
         } else {
             let file = match File::open(&filename) {
                 Ok(f) => f,
@@ -92,21 +105,35 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             if config.mmap {
                 if let Ok(mmap) = unsafe { MmapOptions::new().map(&file) } {
                     let cursor = Cursor::new(&mmap[..]);
-                    process_file(&config, &matcher, cursor, &filename, print_filename, color_enabled, &colors)?;
+                    if process_file(&config, &matcher, cursor, &filename, print_filename, color_enabled, &colors)? {
+                        any_match = true;
+                        if config.quiet {
+                            return Ok(RunResult::MatchFound);
+                        }
+                    }
                     continue;
                 }
             }
 
             let reader = BufReader::new(file);
-            process_file(&config, &matcher, reader, &filename, print_filename, color_enabled, &colors)?;
+            if process_file(&config, &matcher, reader, &filename, print_filename, color_enabled, &colors)? {
+                any_match = true;
+                if config.quiet {
+                    return Ok(RunResult::MatchFound);
+                }
+            }
         }
     }
 
     if has_error {
-        std::process::exit(2);
+        return Err("".into());
     }
 
-    Ok(())
+    if any_match {
+        Ok(RunResult::MatchFound)
+    } else {
+        Ok(RunResult::NoMatch)
+    }
 }
 
 fn process_file<R: BufRead>(
@@ -117,7 +144,7 @@ fn process_file<R: BufRead>(
     print_filename: bool,
     color_enabled: bool,
     colors: &GrepColors,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<bool, Box<dyn Error>> {
     let before_ctx = config.get_before_context();
     let after_ctx = config.get_after_context();
     let delimiter = if config.null_data { 0 } else { b'\n' };
@@ -174,7 +201,7 @@ fn process_file<R: BufRead>(
             }
 
             if config.quiet {
-                std::process::exit(0);
+                return Ok(true);
             }
 
             if config.files_with_matches || config.files_without_match {
@@ -256,7 +283,7 @@ fn process_file<R: BufRead>(
         }
     }
 
-    Ok(())
+    Ok(has_match)
 }
 
 fn build_globset(patterns: &[String]) -> Result<GlobSet, Box<dyn Error>> {
@@ -516,5 +543,44 @@ mod tests {
         
         let should_print_separator = last_printed > 0 && first_to_print > last_printed + 1 && (before_ctx > 0 || after_ctx > 0);
         assert!(!should_print_separator); // no gap, overlapping or contiguous
+    }
+
+    #[test]
+    fn test_limit_max_count() {
+        let mut config = crate::cli::Config::parse_args(vec![
+            std::ffi::OsString::from("rgrep"),
+            std::ffi::OsString::from("foo"),
+        ]).unwrap();
+        config.max_count = Some(2);
+        
+        let matcher = Matcher::new(&config, vec!["foo".to_string()]).unwrap();
+        let input = "foo\nfoo\nfoo\nbar\n";
+        let reader = std::io::BufReader::new(input.as_bytes());
+        let colors = GrepColors::from_env();
+        
+        let result = process_file(&config, &matcher, reader, "test", false, false, &colors).unwrap();
+        assert!(result); // has match
+    }
+
+    #[test]
+    fn test_quiet_early_exit() {
+        let mut config = crate::cli::Config::parse_args(vec![
+            std::ffi::OsString::from("rgrep"),
+            std::ffi::OsString::from("foo"),
+        ]).unwrap();
+        config.quiet = true;
+        
+        let matcher = Matcher::new(&config, vec!["foo".to_string()]).unwrap();
+        let input = "bar\nfoo\nbaz\n";
+        let reader = std::io::BufReader::new(input.as_bytes());
+        let colors = GrepColors::from_env();
+        
+        let result = process_file(&config, &matcher, reader, "test", false, false, &colors).unwrap();
+        assert!(result); // match found and early exited
+    }
+
+    #[test]
+    fn test_run_result_semantics() {
+        assert_ne!(RunResult::MatchFound, RunResult::NoMatch);
     }
 }

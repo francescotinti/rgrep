@@ -1,0 +1,5 @@
+name = "no match exit code"
+args = ["foo"]
+stdin = "bar\nbaz\n"
+expected_stdout = ""
+expected_exit_code = 1

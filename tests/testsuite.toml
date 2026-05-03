@@ -45,4 +45,11 @@ cases = [
     "cases/0044_gap_separator.toml",
     "cases/0045_no_group_separator.toml",
     "cases/0046_custom_group_separator.toml",
+    "cases/0047_max_count.toml",
+    "cases/0048_max_count_zero.toml",
+    "cases/0049_quiet_match.toml",
+    "cases/0050_quiet_no_match.toml",
+    "cases/0051_no_messages.toml",
+    "cases/0052_no_match_exit.toml",
+    "cases/0053_missing_file_exit.toml",
 ]

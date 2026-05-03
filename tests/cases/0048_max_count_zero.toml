@@ -1,0 +1,7 @@
+name = "-m 0 base"
+args = ["-m", "0", "foo"]
+stdin = "foo\nbar\n"
+expected_stdout = ""
+expected_exit_code = 1
+skip_if_bsd = true
+skip_reason = "BSD grep treats -m 0 as infinity instead of 0"

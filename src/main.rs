@@ -5,8 +5,15 @@ use std::process;
 fn main() {
     let config = Config::parse();
     
-    if let Err(e) = rgrep::runner::run(config) {
-        eprintln!("rgrep: {}", e);
-        process::exit(2);
+    match rgrep::runner::run(config) {
+        Ok(rgrep::runner::RunResult::MatchFound) => process::exit(0),
+        Ok(rgrep::runner::RunResult::NoMatch) => process::exit(1),
+        Err(e) => {
+            let msg = e.to_string();
+            if !msg.is_empty() {
+                eprintln!("rgrep: {}", msg);
+            }
+            process::exit(2);
+        }
     }
 }
