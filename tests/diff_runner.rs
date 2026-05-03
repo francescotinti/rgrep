@@ -29,6 +29,7 @@ struct TestCase {
     skip_if_bsd: bool,
     #[serde(default)]
     skip_reason: String,
+    requires_feature: Option<String>,
     #[serde(default)]
     expected_to_fail: bool,
     #[serde(default)]
@@ -58,6 +59,11 @@ fn is_bsd_grep() -> bool {
     
     version_str.contains("BSD grep") || (!version_str.contains("GNU") && !version_err.contains("GNU"))
 }
+
+#[cfg(feature = "perl-regexp")]
+const PCRE_AVAILABLE: bool = true;
+#[cfg(not(feature = "perl-regexp"))]
+const PCRE_AVAILABLE: bool = false;
 
 fn run_command_with_stdin(cmd: &str, args: &[String], stdin_data: &str, env: Option<&std::collections::HashMap<String, String>>) -> (i32, String, String) {
     let mut command = Command::new(cmd);
@@ -106,6 +112,13 @@ fn test_differential() {
         if case.skip_if_bsd && is_bsd {
             eprintln!("[skip] {} (bsd grep) - {}", case.name, case.skip_reason);
             continue;
+        }
+
+        if let Some(feat) = &case.requires_feature {
+            if feat == "perl-regexp" && !PCRE_AVAILABLE {
+                eprintln!("[skip] {} (requires --features perl-regexp)", case.name);
+                continue;
+            }
         }
 
         let mut temp_dir_path = None;

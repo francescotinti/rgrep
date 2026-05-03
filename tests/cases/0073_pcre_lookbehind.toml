@@ -1,0 +1,8 @@
+name = "-P lookbehind"
+args = ["-P", "(?<=foo)bar"]
+stdin = "foobar\nbar\n"
+expected_stdout = "foobar\n"
+expected_exit_code = 0
+skip_if_bsd = true
+skip_reason = "ugrep PCRE2 syntax divergence or macOS oracle divergence"
+requires_feature = "perl-regexp"

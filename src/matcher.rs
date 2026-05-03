@@ -6,6 +6,8 @@ use std::error::Error;
 pub enum Engine {
     Regex(Regex),
     AhoCorasick(AhoCorasick),
+    #[cfg(feature = "perl-regexp")]
+    Pcre2(pcre2::bytes::Regex),
 }
 
 pub struct Matcher<'a> {
@@ -58,8 +60,20 @@ impl<'a> Matcher<'a> {
         
         let ignore_case = config.ignore_case && !config.no_ignore_case;
         
+        #[cfg(not(feature = "perl-regexp"))]
         if config.perl_regexp {
-            return Err("-P only supported when compiled with --features perl-regexp".into());
+            eprintln!("rgrep: -P only supported when compiled with --features perl-regexp");
+            std::process::exit(2);
+        }
+
+        #[cfg(feature = "perl-regexp")]
+        if config.perl_regexp {
+            let pat = final_patterns.join("|");
+            let mut builder = pcre2::bytes::RegexBuilder::new();
+            builder.caseless(ignore_case);
+            builder.utf(true).jit(true);
+            let re = builder.build(&pat).map_err(|e| Box::<dyn Error>::from(format!("{}", e)))?;
+            return Ok(Self { config, engine: Engine::Pcre2(re) });
         }
         
         if config.fixed_strings && !config.word_regexp && !config.line_regexp {
@@ -96,6 +110,8 @@ impl<'a> Matcher<'a> {
         let matches = match &self.engine {
             Engine::Regex(re) => re.is_match(line),
             Engine::AhoCorasick(ac) => ac.is_match(line),
+            #[cfg(feature = "perl-regexp")]
+            Engine::Pcre2(re) => re.is_match(line.as_bytes()).unwrap_or(false),
         };
 
         if self.config.invert_match {
@@ -132,6 +148,20 @@ impl<'a> Matcher<'a> {
                 }
                 result.push_str(&line[last_match..]);
                 result
+            },
+            #[cfg(feature = "perl-regexp")]
+            Engine::Pcre2(re) => {
+                let mut result = String::with_capacity(line.len());
+                let mut last_match = 0;
+                for mat in re.find_iter(line.as_bytes()).flatten() {
+                    result.push_str(&line[last_match..mat.start()]);
+                    result.push_str(&format!("\x1b[{}m\x1b[K", ms_code));
+                    result.push_str(&line[mat.start()..mat.end()]);
+                    result.push_str("\x1b[m\x1b[K");
+                    last_match = mat.end();
+                }
+                result.push_str(&line[last_match..]);
+                result
             }
         }
     }
@@ -143,6 +173,8 @@ impl<'a> Matcher<'a> {
         match &self.engine {
             Engine::Regex(re) => re.find_iter(line).map(|m| (m.start(), m.as_str().to_string())).collect(),
             Engine::AhoCorasick(ac) => ac.find_iter(line).map(|m| (m.start(), line[m.start()..m.end()].to_string())).collect(),
+            #[cfg(feature = "perl-regexp")]
+            Engine::Pcre2(re) => re.find_iter(line.as_bytes()).flatten().map(|m| (m.start(), line[m.start()..m.end()].to_string())).collect(),
         }
     }
 }
@@ -168,6 +200,26 @@ mod tests {
         assert_eq!(bre_to_ere("\\(a\\|b\\)"), "(a|b)");
         assert_eq!(bre_to_ere("(a|b)"), "\\(a\\|b\\)");
         assert_eq!(bre_to_ere("^foo$"), "^foo$");
+    }
+
+    #[cfg(feature = "perl-regexp")]
+    #[test]
+    fn test_pcre_lookahead() {
+        let mut config = get_base_config("foo(?=bar)");
+        config.perl_regexp = true;
+        let matcher = Matcher::new(&config, vec!["foo(?=bar)".to_string()]).unwrap();
+        assert!(matcher.is_match("foobar"));
+        assert!(!matcher.is_match("foobaz"));
+    }
+
+    #[cfg(feature = "perl-regexp")]
+    #[test]
+    fn test_pcre_backreference() {
+        let mut config = get_base_config(r"(\w+)\s+\1");
+        config.perl_regexp = true;
+        let matcher = Matcher::new(&config, vec![r"(\w+)\s+\1".to_string()]).unwrap();
+        assert!(matcher.is_match("foo foo"));
+        assert!(!matcher.is_match("foo bar"));
     }
 
     fn get_base_config(pattern: &str) -> Config {

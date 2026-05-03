@@ -69,5 +69,8 @@ cases = [
     "cases/0068_line_buffered.toml",
     "cases/0069_mmap_base.toml",
     "cases/0070_mmap_line_number.toml",
-    "cases/0071_mmap_fallback_stdin.toml"
+    "cases/0071_mmap_fallback_stdin.toml",
+    "cases/0072_pcre_lookahead.toml",
+    "cases/0073_pcre_lookbehind.toml",
+    "cases/0074_pcre_backreference.toml"
 ]

@@ -11,7 +11,10 @@ regex = "1.12.3"
 walkdir = "2.5.0"
 aho-corasick = "1.1"
 
+pcre2 = { version = "0.2.9", optional = true }
 
+[features]
+perl-regexp = ["dep:pcre2"]
 [dev-dependencies]
 toml = "0.8"
 serde = { version = "1.0", features = ["derive"] }
