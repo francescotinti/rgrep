@@ -3,6 +3,9 @@ args = ["-R", "foo", "{FIXTURES}/dir"]
 stdin = ""
 expected_stdout = "{FIXTURES}/dir/a.txt:foo\n{FIXTURES}/dir/link:foo\n"
 expected_exit_code = 0
+sort_output = true
+skip_if_bsd = true
+skip_reason = "BSD grep handles symlinks to files differently with -R"
 
 [[fixture_files]]
 name = "dir/a.txt"

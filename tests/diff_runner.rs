@@ -13,6 +13,8 @@ struct Testsuite {
 struct FixtureFile {
     name: String,
     #[serde(default)]
+    content: String,
+    #[serde(default)]
     symlink_to: Option<String>,
 }
 
@@ -32,6 +34,8 @@ struct TestCase {
     #[serde(default)]
     fixture_files: Vec<FixtureFile>,
     env: Option<std::collections::HashMap<String, String>>,
+    #[serde(default)]
+    sort_output: bool,
 }
 
 #[derive(Debug, PartialEq)]
@@ -143,10 +147,23 @@ fn test_differential() {
         }
 
         let outcome = if rgrep_code == 0 && oracle_code == 0 {
-            if rgrep_stdout == oracle_stdout {
+            let mut r_stdout = rgrep_stdout.clone();
+            let mut o_stdout = oracle_stdout.clone();
+            if case.sort_output {
+                let mut r_lines: Vec<&str> = r_stdout.lines().collect();
+                r_lines.sort();
+                r_stdout = r_lines.join("\n");
+                if !r_stdout.is_empty() { r_stdout.push('\n'); }
+                
+                let mut o_lines: Vec<&str> = o_stdout.lines().collect();
+                o_lines.sort();
+                o_stdout = o_lines.join("\n");
+                if !o_stdout.is_empty() { o_stdout.push('\n'); }
+            }
+            if r_stdout == o_stdout {
                 DiffOutcome::Match
             } else {
-                DiffOutcome::Differ { rgrep: rgrep_stdout.clone(), oracle: oracle_stdout.clone() }
+                DiffOutcome::Differ { rgrep: r_stdout, oracle: o_stdout }
             }
         } else if rgrep_code != 0 && oracle_code != 0 {
             if rgrep_code == oracle_code {
@@ -172,6 +189,21 @@ fn test_differential() {
         }
         
         assert_eq!(oracle_code, case.expected_exit_code, "Oracle grep produced unexpected exit code");
-        assert_eq!(oracle_stdout, processed_expected, "Oracle grep produced unexpected output");
+        
+        let mut final_oracle = oracle_stdout.clone();
+        let mut final_expected = processed_expected.clone();
+        if case.sort_output {
+            let mut o_lines: Vec<&str> = final_oracle.lines().collect();
+            o_lines.sort();
+            final_oracle = o_lines.join("\n");
+            if !final_oracle.is_empty() { final_oracle.push('\n'); }
+            
+            let mut e_lines: Vec<&str> = final_expected.lines().collect();
+            e_lines.sort();
+            final_expected = e_lines.join("\n");
+            if !final_expected.is_empty() { final_expected.push('\n'); }
+        }
+        
+        assert_eq!(final_oracle, final_expected, "Oracle grep produced unexpected output");
     }
 }

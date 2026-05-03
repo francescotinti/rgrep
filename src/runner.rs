@@ -57,7 +57,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     }
 
     let matcher = Matcher::new(&config, raw_patterns)?;
-    let files_to_search = resolve_files(&config, extra_files)?;
+    let (files_to_search, mut has_error) = resolve_files(&config, extra_files)?;
     
     let is_recursive = config.recursive || config.dereference_recursive || config.directories == crate::cli::DirectoriesAction::Recurse;
     let print_filename = match (config.with_filename, config.no_filename) {
@@ -84,6 +84,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
                     if !config.no_messages {
                         eprintln!("rgrep: {}: {}", filename, e);
                     }
+                    has_error = true;
                     continue;
                 }
             };
@@ -99,6 +100,10 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             let reader = BufReader::new(file);
             process_file(&config, &matcher, reader, &filename, print_filename, color_enabled, &colors)?;
         }
+    }
+
+    if has_error {
+        std::process::exit(2);
     }
 
     Ok(())
@@ -262,11 +267,12 @@ fn build_globset(patterns: &[String]) -> Result<GlobSet, Box<dyn Error>> {
     Ok(builder.build()?)
 }
 
-fn resolve_files(config: &Config, extra_files: Vec<String>) -> Result<Vec<String>, Box<dyn Error>> {
+fn resolve_files(config: &Config, extra_files: Vec<String>) -> Result<(Vec<String>, bool), Box<dyn Error>> {
     use crate::cli::{DirectoriesAction, DevicesAction};
     use std::os::unix::fs::FileTypeExt;
 
     let mut resolved_files = Vec::new();
+    let mut has_error = false;
 
     let mut all_files = extra_files;
     all_files.extend(config.files.clone());
@@ -285,8 +291,11 @@ fn resolve_files(config: &Config, extra_files: Vec<String>) -> Result<Vec<String
             for line in content.lines() {
                 exclude_patterns.push(line.to_string());
             }
-        } else if !config.no_messages {
-            eprintln!("rgrep: {}: No such file or directory", f);
+        } else {
+            if !config.no_messages {
+                eprintln!("rgrep: {}: No such file or directory", f);
+            }
+            has_error = true;
         }
     }
     let exclude_set = build_globset(&exclude_patterns)?;
@@ -312,6 +321,7 @@ fn resolve_files(config: &Config, extra_files: Vec<String>) -> Result<Vec<String
                                 if !config.no_messages {
                                     eprintln!("rgrep: {}", e);
                                 }
+                                has_error = true;
                                 continue;
                             },
                             Some(Ok(entry)) => entry,
@@ -340,6 +350,7 @@ fn resolve_files(config: &Config, extra_files: Vec<String>) -> Result<Vec<String
                     if !config.no_messages {
                         eprintln!("rgrep: {}: Is a directory", path);
                     }
+                    has_error = true;
                 }
             } else {
                 let file_type = meta.file_type();
@@ -354,10 +365,11 @@ fn resolve_files(config: &Config, extra_files: Vec<String>) -> Result<Vec<String
             if !config.no_messages {
                 eprintln!("rgrep: {}: No such file or directory", path);
             }
+            has_error = true;
         }
     }
 
-    Ok(resolved_files)
+    Ok((resolved_files, has_error))
 }
 
 fn print_line(config: &Config, filename: &str, print_filename: bool, line_number: usize, byte_offset: usize, line: &str, is_match: bool, color_enabled: bool, colors: &GrepColors) {

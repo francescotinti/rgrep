@@ -216,6 +216,7 @@ impl Config {
 
     pub fn get_before_context(&self) -> usize {
         std::cmp::max(self.before_context, self.context)
+    }
 }
 
 #[cfg(test)]
