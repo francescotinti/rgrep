@@ -184,6 +184,7 @@ mod tests {
             no_group_separator: false,
             exclude_from: None,
             binary_files: None,
+            without_match: false,
             binary: false,
             initial_tab: false,
             label: "(standard input)".to_string(),
