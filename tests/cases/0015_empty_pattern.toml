@@ -1,0 +1,5 @@
+name = "empty pattern"
+args = ["-e", ""]
+stdin = "foo\nbar\n"
+expected_stdout = "foo\nbar\n"
+expected_exit_code = 0

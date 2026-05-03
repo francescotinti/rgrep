@@ -1,0 +1,9 @@
+name = "combined e f"
+args = ["-e", "foo", "-f", "{FIXTURES}/p.txt"]
+stdin = "foo\nbaz\nbar\nbaz\nqux\n"
+expected_stdout = "foo\nbar\nqux\n"
+expected_exit_code = 0
+
+[[fixture_files]]
+name = "p.txt"
+content = "bar\nqux\n"

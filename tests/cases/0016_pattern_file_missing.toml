@@ -1,0 +1,5 @@
+name = "pattern file missing"
+args = ["-f", "/nonexistent/patfile"]
+stdin = "irrelevant\n"
+expected_stdout = ""
+expected_exit_code = 2

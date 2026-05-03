@@ -1,0 +1,9 @@
+name = "pattern file"
+args = ["-f", "{FIXTURES}/p.txt"]
+stdin = "foo\nbaz\nbar\n"
+expected_stdout = "foo\nbar\n"
+expected_exit_code = 0
+
+[[fixture_files]]
+name = "p.txt"
+content = "foo\nbar\n"

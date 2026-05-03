@@ -10,6 +10,12 @@ struct Testsuite {
 }
 
 #[derive(Deserialize)]
+struct FixtureFile {
+    name: String,
+    content: String,
+}
+
+#[derive(Deserialize)]
 struct TestCase {
     name: String,
     args: Vec<String>,
@@ -22,6 +28,8 @@ struct TestCase {
     skip_reason: String,
     #[serde(default)]
     expected_to_fail: bool,
+    #[serde(default)]
+    fixture_files: Vec<FixtureFile>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -89,9 +97,33 @@ fn test_differential() {
             continue;
         }
 
-        let (oracle_code, oracle_stdout, _oracle_stderr) = run_command_with_stdin("grep", &case.args, &case.stdin);
+        let mut temp_dir_path = None;
+        if !case.fixture_files.is_empty() {
+            let t = std::env::temp_dir().join(format!("testag-grep-fixtures-{}", case.name.replace(" ", "_")));
+            let _ = fs::remove_dir_all(&t);
+            fs::create_dir_all(&t).unwrap();
+            for f in &case.fixture_files {
+                let p = t.join(&f.name);
+                fs::write(p, &f.content).unwrap();
+            }
+            temp_dir_path = Some(t);
+        }
+
+        let mut processed_args = case.args.clone();
+        if let Some(t) = &temp_dir_path {
+            let t_str = t.to_string_lossy();
+            for arg in &mut processed_args {
+                *arg = arg.replace("{FIXTURES}", &t_str);
+            }
+        }
+
+        let (oracle_code, oracle_stdout, _oracle_stderr) = run_command_with_stdin("grep", &processed_args, &case.stdin);
         
-        let (rgrep_code, rgrep_stdout, rgrep_stderr) = run_command_with_stdin(rgrep_bin, &case.args, &case.stdin);
+        let (rgrep_code, rgrep_stdout, rgrep_stderr) = run_command_with_stdin(rgrep_bin, &processed_args, &case.stdin);
+
+        if let Some(t) = temp_dir_path {
+            let _ = fs::remove_dir_all(t);
+        }
 
         let outcome = if rgrep_code == 0 && oracle_code == 0 {
             if rgrep_stdout == oracle_stdout {
@@ -118,7 +150,7 @@ fn test_differential() {
         if outcome != DiffOutcome::Match {
             panic!(
                 "Test '{}' failed! Outcome: {:?}\nArgs: {:?}\nExpected Code: {}\nOracle Code: {}\nRgrep Code: {}\nOracle Stdout:\n{}\nRgrep Stdout:\n{}\nRgrep Stderr:\n{}",
-                case.name, outcome, case.args, case.expected_exit_code, oracle_code, rgrep_code, oracle_stdout, rgrep_stdout, rgrep_stderr
+                case.name, outcome, processed_args, case.expected_exit_code, oracle_code, rgrep_code, oracle_stdout, rgrep_stdout, rgrep_stderr
             );
         }
         

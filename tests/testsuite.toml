@@ -10,4 +10,9 @@ cases = [
     "cases/0009_invalid_regex_exit2.toml",
     "cases/0010_fixed_string_word.toml",
     "cases/0011_perl_regexp_unsupported.toml",
+    "cases/0012_multiple_e.toml",
+    "cases/0013_pattern_file.toml",
+    "cases/0014_combined_e_f.toml",
+    "cases/0015_empty_pattern.toml",
+    "cases/0016_pattern_file_missing.toml",
 ]

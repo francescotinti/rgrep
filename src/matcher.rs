@@ -47,24 +47,7 @@ pub fn bre_to_ere(pattern: &str) -> String {
 }
 
 impl<'a> Matcher<'a> {
-    pub fn new(config: &'a Config) -> Result<Self, Box<dyn Error>> {
-        let mut raw_patterns = Vec::new();
-        
-        if let Some(p) = &config.pattern {
-            raw_patterns.push(p.clone());
-        }
-        
-        for p in &config.regexp {
-            raw_patterns.push(p.clone());
-        }
-        
-        for f in &config.file_patterns {
-            let content = std::fs::read_to_string(f)?;
-            for line in content.lines() {
-                raw_patterns.push(line.to_string());
-            }
-        }
-        
+    pub fn new(config: &'a Config, raw_patterns: Vec<String>) -> Result<Self, Box<dyn Error>> {
         let is_basic = config.basic_regexp || (!config.extended_regexp && !config.fixed_strings && !config.perl_regexp);
         
         let final_patterns: Vec<String> = if is_basic {
@@ -225,7 +208,7 @@ mod tests {
     #[test]
     fn test_is_match_basic() {
         let config = get_base_config("hello");
-        let matcher = Matcher::new(&config).unwrap();
+        let matcher = Matcher::new(&config, vec!["hello".to_string()]).unwrap();
         assert!(matcher.is_match("hello world"));
         assert!(!matcher.is_match("bye world"));
     }
@@ -234,7 +217,7 @@ mod tests {
     fn test_is_match_ignore_case() {
         let mut config = get_base_config("HELLO");
         config.ignore_case = true;
-        let matcher = Matcher::new(&config).unwrap();
+        let matcher = Matcher::new(&config, vec!["HELLO".to_string()]).unwrap();
         assert!(matcher.is_match("hello world"));
     }
 
@@ -242,7 +225,7 @@ mod tests {
     fn test_is_match_invert() {
         let mut config = get_base_config("hello");
         config.invert_match = true;
-        let matcher = Matcher::new(&config).unwrap();
+        let matcher = Matcher::new(&config, vec!["hello".to_string()]).unwrap();
         assert!(!matcher.is_match("hello world"));
         assert!(matcher.is_match("bye world"));
     }
@@ -251,7 +234,7 @@ mod tests {
     fn test_is_match_word_regexp() {
         let mut config = get_base_config("hello");
         config.word_regexp = true;
-        let matcher = Matcher::new(&config).unwrap();
+        let matcher = Matcher::new(&config, vec!["hello".to_string()]).unwrap();
         assert!(matcher.is_match("say hello to him"));
         assert!(!matcher.is_match("say helloworld to him"));
     }
@@ -260,7 +243,7 @@ mod tests {
     fn test_is_match_line_regexp() {
         let mut config = get_base_config("hello");
         config.line_regexp = true;
-        let matcher = Matcher::new(&config).unwrap();
+        let matcher = Matcher::new(&config, vec!["hello".to_string()]).unwrap();
         assert!(matcher.is_match("hello"));
         assert!(!matcher.is_match("say hello"));
     }
@@ -268,7 +251,7 @@ mod tests {
     #[test]
     fn test_is_match_regex() {
         let config = get_base_config("h.*o");
-        let matcher = Matcher::new(&config).unwrap();
+        let matcher = Matcher::new(&config, vec!["h.*o".to_string()]).unwrap();
         assert!(matcher.is_match("say hello to him"));
     }
 
@@ -276,7 +259,7 @@ mod tests {
     fn test_multiple_patterns() {
         let mut config = get_base_config("hello");
         config.regexp = vec!["world".to_string()];
-        let matcher = Matcher::new(&config).unwrap();
+        let matcher = Matcher::new(&config, vec!["hello".to_string(), "world".to_string()]).unwrap();
         assert!(matcher.is_match("say hello to him"));
         assert!(matcher.is_match("what a beautiful world"));
         assert!(!matcher.is_match("something else entirely"));
@@ -286,7 +269,7 @@ mod tests {
     fn test_fixed_strings() {
         let mut config = get_base_config("h.*o");
         config.fixed_strings = true;
-        let matcher = Matcher::new(&config).unwrap();
+        let matcher = Matcher::new(&config, vec!["h.*o".to_string()]).unwrap();
         assert!(!matcher.is_match("say hello to him"));
         assert!(matcher.is_match("literal h.*o string"));
     }

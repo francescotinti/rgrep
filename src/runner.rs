@@ -8,9 +8,54 @@ use walkdir::WalkDir;
 use memmap2::MmapOptions;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 
+pub fn load_pattern_file(path: &str) -> Result<Vec<String>, Box<dyn Error>> {
+    let file = File::open(path).map_err(|e| format!("{}: {}", path, e))?;
+    let mut reader = BufReader::new(file);
+    let mut patterns = Vec::new();
+    let mut buffer = Vec::new();
+    loop {
+        buffer.clear();
+        let bytes_read = reader.read_until(b'\n', &mut buffer)?;
+        if bytes_read == 0 {
+            break;
+        }
+        let mut line = String::from_utf8_lossy(&buffer).into_owned();
+        if line.ends_with('\n') {
+            line.pop();
+            if line.ends_with('\r') {
+                line.pop();
+            }
+        }
+        patterns.push(line);
+    }
+    Ok(patterns)
+}
+
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    let matcher = Matcher::new(&config)?;
-    let files_to_search = resolve_files(&config)?;
+    let mut raw_patterns = Vec::new();
+
+    for p in &config.regexp {
+        raw_patterns.push(p.clone());
+    }
+
+    for f in &config.file_patterns {
+        raw_patterns.extend(load_pattern_file(f)?);
+    }
+
+    let mut extra_files = Vec::new();
+
+    if !config.regexp.is_empty() || !config.file_patterns.is_empty() {
+        if let Some(p) = &config.pattern {
+            extra_files.push(p.clone());
+        }
+    } else {
+        if let Some(p) = &config.pattern {
+            raw_patterns.push(p.clone());
+        }
+    }
+
+    let matcher = Matcher::new(&config, raw_patterns)?;
+    let files_to_search = resolve_files(&config, extra_files)?;
     
     let mut print_filename = files_to_search.len() > 1;
     if config.no_filename {
@@ -198,13 +243,16 @@ fn build_globset(patterns: &[String]) -> Result<GlobSet, Box<dyn Error>> {
     Ok(builder.build()?)
 }
 
-fn resolve_files(config: &Config) -> Result<Vec<String>, Box<dyn Error>> {
+fn resolve_files(config: &Config, extra_files: Vec<String>) -> Result<Vec<String>, Box<dyn Error>> {
     let mut resolved_files = Vec::new();
 
-    let files = if config.files.is_empty() {
+    let mut all_files = extra_files;
+    all_files.extend(config.files.clone());
+
+    let files = if all_files.is_empty() {
         vec!["-".to_string()]
     } else {
-        config.files.clone()
+        all_files
     };
 
     let include_set = build_globset(&config.include)?;
@@ -312,5 +360,37 @@ fn print_line(config: &Config, filename: &str, print_filename: bool, line_number
     
     if config.line_buffered {
         let _ = io::stdout().flush();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_load_pattern_file() {
+        let dir = std::env::temp_dir().join("test_pattern_loader");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        
+        // Empty file
+        let empty_path = dir.join("empty.txt");
+        std::fs::write(&empty_path, "").unwrap();
+        let pats = load_pattern_file(empty_path.to_str().unwrap()).unwrap();
+        assert!(pats.is_empty());
+
+        // Empty lines mixed
+        let mixed_path = dir.join("mixed.txt");
+        std::fs::write(&mixed_path, "foo\n\nbar\n").unwrap();
+        let pats = load_pattern_file(mixed_path.to_str().unwrap()).unwrap();
+        assert_eq!(pats, vec!["foo", "", "bar"]);
+
+        // CRLF
+        let crlf_path = dir.join("crlf.txt");
+        std::fs::write(&crlf_path, "foo\r\nbar\r\n").unwrap();
+        let pats = load_pattern_file(crlf_path.to_str().unwrap()).unwrap();
+        assert_eq!(pats, vec!["foo", "bar"]);
+        
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

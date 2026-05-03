@@ -1,0 +1,5 @@
+name = "multiple e"
+args = ["-e", "foo", "-e", "bar"]
+stdin = "foo\nbaz\nbar\nfoobar\n"
+expected_stdout = "foo\nbar\nfoobar\n"
+expected_exit_code = 0
