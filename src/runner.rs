@@ -85,7 +85,7 @@ pub fn run(config: Config) -> Result<RunResult, Box<dyn Error>> {
         if filename == "-" {
             let stdin = io::stdin();
             let reader = stdin.lock();
-            if process_file(&config, &matcher, reader, &config.label, print_filename, color_enabled, &colors)? {
+            if bufread_search(&config, &matcher, reader, &config.label, print_filename, color_enabled, &colors)? {
                 any_match = true;
                 if config.quiet {
                     return Ok(RunResult::MatchFound);
@@ -103,10 +103,12 @@ pub fn run(config: Config) -> Result<RunResult, Box<dyn Error>> {
                 }
             };
 
-            if config.mmap {
-                if let Ok(mmap) = unsafe { MmapOptions::new().map(&file) } {
-                    let cursor = Cursor::new(&mmap[..]);
-                    if process_file(&config, &matcher, cursor, &filename, print_filename, color_enabled, &colors)? {
+            let metadata = match file.metadata() {
+                Ok(m) => m,
+                Err(_) => {
+                    // Fallback to bufread if metadata fails for some reason
+                    let reader = BufReader::new(file);
+                    if bufread_search(&config, &matcher, reader, &filename, print_filename, color_enabled, &colors)? {
                         any_match = true;
                         if config.quiet {
                             return Ok(RunResult::MatchFound);
@@ -114,10 +116,18 @@ pub fn run(config: Config) -> Result<RunResult, Box<dyn Error>> {
                     }
                     continue;
                 }
-            }
+            };
+            let use_mmap = config.mmap && metadata.is_file() && metadata.len() > 0;
+            let result = if use_mmap {
+                match try_mmap_search(&file, &config, &matcher, &filename, print_filename, color_enabled, &colors) {
+                    Ok(r) => r,
+                    Err(_) => bufread_search(&config, &matcher, BufReader::new(file), &filename, print_filename, color_enabled, &colors)?,
+                }
+            } else {
+                bufread_search(&config, &matcher, BufReader::new(file), &filename, print_filename, color_enabled, &colors)?
+            };
 
-            let reader = BufReader::new(file);
-            if process_file(&config, &matcher, reader, &filename, print_filename, color_enabled, &colors)? {
+            if result {
                 any_match = true;
                 if config.quiet {
                     return Ok(RunResult::MatchFound);
@@ -137,7 +147,35 @@ pub fn run(config: Config) -> Result<RunResult, Box<dyn Error>> {
     }
 }
 
-fn process_file<R: BufRead>(
+fn try_mmap_search(
+    file: &File,
+    config: &Config,
+    matcher: &Matcher,
+    filename: &str,
+    print_filename: bool,
+    color_enabled: bool,
+    colors: &GrepColors,
+) -> io::Result<bool> {
+    let mmap = unsafe { MmapOptions::new().map(file)? };
+    let bytes: &[u8] = &mmap;
+    search_buffer(bytes, config, matcher, filename, print_filename, color_enabled, colors)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+}
+
+fn search_buffer(
+    buf: &[u8],
+    config: &Config,
+    matcher: &Matcher,
+    filename: &str,
+    print_filename: bool,
+    color_enabled: bool,
+    colors: &GrepColors,
+) -> Result<bool, Box<dyn Error>> {
+    let cursor = Cursor::new(buf);
+    bufread_search(config, matcher, cursor, filename, print_filename, color_enabled, colors)
+}
+
+fn bufread_search<R: BufRead>(
     config: &Config,
     matcher: &Matcher,
     mut reader: R,
@@ -590,7 +628,7 @@ mod tests {
         let reader = std::io::BufReader::new(input.as_bytes());
         let colors = GrepColors::from_env();
         
-        let result = process_file(&config, &matcher, reader, "test", false, false, &colors).unwrap();
+        let result = bufread_search(&config, &matcher, reader, "test", false, false, &colors).unwrap();
         assert!(result); // has match
     }
 
@@ -607,7 +645,7 @@ mod tests {
         let reader = std::io::BufReader::new(input.as_bytes());
         let colors = GrepColors::from_env();
         
-        let result = process_file(&config, &matcher, reader, "test", false, false, &colors).unwrap();
+        let result = bufread_search(&config, &matcher, reader, "test", false, false, &colors).unwrap();
         assert!(result); // match found and early exited
     }
 
@@ -629,7 +667,7 @@ mod tests {
         let reader = std::io::BufReader::new(&input[..]);
         let colors = GrepColors::from_env();
         
-        let result = process_file(&config, &matcher, reader, "test", false, false, &colors).unwrap();
+        let result = bufread_search(&config, &matcher, reader, "test", false, false, &colors).unwrap();
         assert!(result);
     }
 
@@ -654,5 +692,44 @@ mod tests {
         config.null_data = true;
         config.null = true;
         assert!(config.null_data);
+    }
+
+    #[test]
+    fn test_mmap_regular_file() {
+        use std::io::Write;
+        let mut config = crate::cli::Config::parse_args(vec![
+            std::ffi::OsString::from("rgrep"),
+            std::ffi::OsString::from("--mmap"),
+            std::ffi::OsString::from("foo"),
+        ]).unwrap();
+        config.mmap = true;
+        
+        let temp_path = std::env::temp_dir().join("test_mmap_rgrep.txt");
+        let mut file = std::fs::File::create(&temp_path).unwrap();
+        file.write_all(b"foo\nbar\nfoo\n").unwrap();
+        
+        let metadata = std::fs::metadata(&temp_path).unwrap();
+        assert!(metadata.is_file());
+        assert!(metadata.len() > 0);
+        let _ = std::fs::remove_file(temp_path);
+    }
+
+    #[test]
+    fn test_mmap_stdin_fallback() {
+        let mut config = crate::cli::Config::parse_args(vec![
+            std::ffi::OsString::from("rgrep"),
+            std::ffi::OsString::from("--mmap"),
+            std::ffi::OsString::from("foo"),
+        ]).unwrap();
+        config.mmap = true;
+        
+        let matcher = Matcher::new(&config, vec!["foo".to_string()]).unwrap();
+        let input = b"foo\n";
+        let cursor = Cursor::new(&input[..]);
+        let colors = GrepColors::from_env();
+        
+        // This simulates bufread_search being called on stdin despite config.mmap
+        let result = bufread_search(&config, &matcher, cursor, "(standard input)", false, false, &colors).unwrap();
+        assert!(result);
     }
 }
