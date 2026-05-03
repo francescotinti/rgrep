@@ -83,7 +83,8 @@ pub fn run(config: Config) -> Result<RunResult, Box<dyn Error>> {
 
     for filename in files_to_search {
         if filename == "-" {
-            let reader = BufReader::new(io::stdin());
+            let stdin = io::stdin();
+            let reader = stdin.lock();
             if process_file(&config, &matcher, reader, &config.label, print_filename, color_enabled, &colors)? {
                 any_match = true;
                 if config.quiet {
@@ -222,7 +223,7 @@ fn process_file<R: BufRead>(
                 if config.count || config.files_with_matches || config.files_without_match {
                     break;
                 } else {
-                    println!("Binary file {} matches", if filename == "-" { "(standard input)" } else { filename });
+                    println!("Binary file {} matches", if filename == "-" { &config.label } else { filename });
                     return Ok(true);
                 }
             }

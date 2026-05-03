@@ -1,0 +1,7 @@
+name = "-T tab alignment"
+args = ["-T", "foo"]
+stdin = "foo\n"
+expected_stdout = "\tfoo\n"
+expected_exit_code = 0
+skip_if_bsd = true
+skip_reason = "BSD grep does not support -T"

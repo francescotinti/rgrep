@@ -1,0 +1,5 @@
+name = "--line-buffered"
+args = ["--line-buffered", "foo"]
+stdin = "foo\nbar\nfoo\n"
+expected_stdout = "foo\nfoo\n"
+expected_exit_code = 0

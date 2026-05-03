@@ -1,0 +1,5 @@
+name = "--label replaces stdin name"
+args = ["--label=mystdin", "-H", "foo"]
+stdin = "foo\n"
+expected_stdout = "mystdin:foo\n"
+expected_exit_code = 0

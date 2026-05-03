@@ -62,4 +62,9 @@ cases = [
     "cases/0061_null_data_only_matching.toml",
     "cases/0062_null_filename_files_with_matches.toml",
     "cases/0063_null_data_cross_file.toml",
+    "cases/0064_initial_tab.toml",
+    "cases/0065_initial_tab_line_number.toml",
+    "cases/0066_label_stdin.toml",
+    "cases/0067_label_binary.toml",
+    "cases/0068_line_buffered.toml"
 ]

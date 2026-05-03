@@ -1,0 +1,5 @@
+name = "--label in binary message"
+args = ["--label=BIN", "foo"]
+stdin = "foo\u0000bar\n"
+expected_stdout = "Binary file BIN matches\n"
+expected_exit_code = 0
