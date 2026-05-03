@@ -1,0 +1,5 @@
+name = "-A 1 base"
+args = ["-A", "1", "foo"]
+stdin = "bar\nfoo\nbaz\nqux\n"
+expected_stdout = "foo\nbaz\n"
+expected_exit_code = 0

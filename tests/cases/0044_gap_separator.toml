@@ -1,0 +1,5 @@
+name = "gap separator"
+args = ["-A", "1", "foo"]
+stdin = "foo\na\nb\nc\nfoo\nd\n"
+expected_stdout = "foo\na\n--\nfoo\nd\n"
+expected_exit_code = 0

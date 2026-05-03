@@ -1,0 +1,5 @@
+name = "overlap no separator"
+args = ["-A", "1", "foo"]
+stdin = "foo\na\nfoo\nb\n"
+expected_stdout = "foo\na\nfoo\nb\n"
+expected_exit_code = 0

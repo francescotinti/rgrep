@@ -476,4 +476,45 @@ mod tests {
         assert!(!check_file("test.log"));
         assert!(!check_file("ignore.txt"));
     }
+
+    #[test]
+    fn test_context_ring_buffer() {
+        use std::collections::VecDeque;
+        let capacity = 2;
+        let mut history: VecDeque<(usize, usize, String)> = VecDeque::with_capacity(capacity);
+        
+        // Push 3 items into capacity 2 buffer
+        for i in 1..=3 {
+            if history.len() == capacity {
+                history.pop_front();
+            }
+            history.push_back((i, i*10, format!("line {}", i)));
+        }
+        
+        assert_eq!(history.len(), 2);
+        assert_eq!(history.front().unwrap().0, 2);
+        assert_eq!(history.back().unwrap().0, 3);
+    }
+
+    #[test]
+    fn test_group_separator_gap_logic() {
+        let before_ctx = 1;
+        let after_ctx = 1;
+        let last_printed = 5;
+        let first_to_print = 8;
+        
+        let should_print_separator = last_printed > 0 && first_to_print > last_printed + 1 && (before_ctx > 0 || after_ctx > 0);
+        assert!(should_print_separator); // gap of 2 lines
+    }
+
+    #[test]
+    fn test_group_separator_overlap_logic() {
+        let before_ctx = 1;
+        let after_ctx = 1;
+        let last_printed = 5;
+        let first_to_print = 6;
+        
+        let should_print_separator = last_printed > 0 && first_to_print > last_printed + 1 && (before_ctx > 0 || after_ctx > 0);
+        assert!(!should_print_separator); // no gap, overlapping or contiguous
+    }
 }

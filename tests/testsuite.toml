@@ -38,4 +38,11 @@ cases = [
     "cases/0037_exclude_dir.toml",
     "cases/0038_exclude_from.toml",
     "cases/0039_combination.toml",
+    "cases/0040_after_base.toml",
+    "cases/0041_before_base.toml",
+    "cases/0042_context_base.toml",
+    "cases/0043_overlap_no_separator.toml",
+    "cases/0044_gap_separator.toml",
+    "cases/0045_no_group_separator.toml",
+    "cases/0046_custom_group_separator.toml",
 ]

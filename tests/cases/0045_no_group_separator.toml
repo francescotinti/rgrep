@@ -1,0 +1,7 @@
+name = "no group separator"
+args = ["-A", "1", "--no-group-separator", "foo"]
+stdin = "foo\na\nb\nc\nfoo\nd\n"
+expected_stdout = "foo\na\nfoo\nd\n"
+expected_exit_code = 0
+skip_if_bsd = true
+skip_reason = "BSD grep does not support --no-group-separator"
