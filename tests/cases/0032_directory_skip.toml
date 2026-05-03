@@ -1,0 +1,10 @@
+name = "directory skip"
+args = ["-d", "skip", "foo", "{FIXTURES}/dir"]
+stdin = ""
+expected_stdout = ""
+expected_exit_code = 1
+expected_to_fail = true
+
+[[fixture_files]]
+name = "dir/a.txt"
+content = "foo\n"

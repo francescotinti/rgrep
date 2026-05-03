@@ -12,7 +12,8 @@ struct Testsuite {
 #[derive(Deserialize)]
 struct FixtureFile {
     name: String,
-    content: String,
+    #[serde(default)]
+    symlink_to: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -110,7 +111,15 @@ fn test_differential() {
             fs::create_dir_all(&t).unwrap();
             for f in &case.fixture_files {
                 let p = t.join(&f.name);
-                fs::write(p, &f.content).unwrap();
+                if let Some(parent) = p.parent() {
+                    fs::create_dir_all(parent).unwrap();
+                }
+                if let Some(target) = &f.symlink_to {
+                    #[cfg(unix)]
+                    std::os::unix::fs::symlink(target, &p).unwrap();
+                } else {
+                    fs::write(&p, &f.content).unwrap();
+                }
             }
             temp_dir_path = Some(t);
         }

@@ -1,0 +1,9 @@
+name = "directory recurse"
+args = ["-d", "recurse", "foo", "{FIXTURES}/dir"]
+stdin = ""
+expected_stdout = "{FIXTURES}/dir/a.txt:foo\n"
+expected_exit_code = 0
+
+[[fixture_files]]
+name = "dir/a.txt"
+content = "foo\n"

@@ -28,4 +28,9 @@ cases = [
     "cases/0027_color_never.toml",
     "cases/0028_color_always.toml",
     "cases/0029_color_env_override.toml",
+    "cases/0030_recursive_base.toml",
+    "cases/0031_dereference_recursive.toml",
+    "cases/0032_directory_skip.toml",
+    "cases/0033_directory_recurse.toml",
+    "cases/0034_nonexistent_directory.toml",
 ]

@@ -59,10 +59,11 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let matcher = Matcher::new(&config, raw_patterns)?;
     let files_to_search = resolve_files(&config, extra_files)?;
     
+    let is_recursive = config.recursive || config.dereference_recursive || config.directories == crate::cli::DirectoriesAction::Recurse;
     let print_filename = match (config.with_filename, config.no_filename) {
         (true, _) => true,
         (_, true) => false,
-        _ => files_to_search.len() > 1 || config.recursive || config.dereference_recursive,
+        _ => files_to_search.len() > 1 || is_recursive,
     };
 
     let color_enabled = match config.color.as_str() {
@@ -262,6 +263,9 @@ fn build_globset(patterns: &[String]) -> Result<GlobSet, Box<dyn Error>> {
 }
 
 fn resolve_files(config: &Config, extra_files: Vec<String>) -> Result<Vec<String>, Box<dyn Error>> {
+    use crate::cli::{DirectoriesAction, DevicesAction};
+    use std::os::unix::fs::FileTypeExt;
+
     let mut resolved_files = Vec::new();
 
     let mut all_files = extra_files;
@@ -297,8 +301,9 @@ fn resolve_files(config: &Config, extra_files: Vec<String>) -> Result<Vec<String
 
         let metadata = fs::metadata(path);
         if let Ok(meta) = metadata {
+            let is_recursive = config.recursive || config.dereference_recursive || config.directories == DirectoriesAction::Recurse;
             if meta.is_dir() {
-                if config.recursive || config.dereference_recursive {
+                if is_recursive {
                     let mut it = WalkDir::new(path).follow_links(config.dereference_recursive).into_iter();
                     loop {
                         let entry = match it.next() {
@@ -331,12 +336,18 @@ fn resolve_files(config: &Config, extra_files: Vec<String>) -> Result<Vec<String
                             resolved_files.push(entry.path().to_string_lossy().into_owned());
                         }
                     }
-                } else if config.directories.as_deref() != Some("skip") {
+                } else if config.directories == DirectoriesAction::Read {
                     if !config.no_messages {
                         eprintln!("rgrep: {}: Is a directory", path);
                     }
                 }
             } else {
+                let file_type = meta.file_type();
+                if file_type.is_fifo() || file_type.is_socket() || file_type.is_block_device() || file_type.is_char_device() {
+                    if config.devices == DevicesAction::Skip {
+                        continue;
+                    }
+                }
                 resolved_files.push(path.clone());
             }
         } else {
