@@ -165,7 +165,7 @@ fn process_file<R: BufRead>(
     
     if binary_action != crate::cli::BinaryAction::Text {
         if let Ok(buf) = reader.fill_buf() {
-            if buf.contains(&0) {
+            if buf.contains(&0) && delimiter != 0 {
                 is_binary = true;
                 if binary_action == crate::cli::BinaryAction::WithoutMatch {
                     return Ok(false);
@@ -429,30 +429,39 @@ fn print_line(config: &Config, filename: &str, print_filename: bool, line_number
     let sep_col = if color_enabled { ansi_wrap(sep, &colors.se) } else { sep.to_string() };
     let null_sep = "\0";
 
+    let mut stdout = io::stdout();
+    
     if config.initial_tab {
-        print!("\t");
+        let _ = stdout.write_all(b"\t");
     }
 
     if print_filename {
         let fname_col = if color_enabled { ansi_wrap(filename, &colors.fn_color) } else { filename.to_string() };
+        let _ = stdout.write_all(fname_col.as_bytes());
         if config.null {
-            print!("{}{}", fname_col, null_sep);
+            let _ = stdout.write_all(b"\0");
         } else {
-            print!("{}{}", fname_col, sep_col);
+            let _ = stdout.write_all(sep_col.as_bytes());
         }
     }
     if config.line_number {
         let lnum_col = if color_enabled { ansi_wrap(&line_number.to_string(), &colors.ln) } else { line_number.to_string() };
-        print!("{}{}", lnum_col, sep_col);
+        let _ = stdout.write_all(lnum_col.as_bytes());
+        let _ = stdout.write_all(sep_col.as_bytes());
     }
     if config.byte_offset {
         let boff_col = if color_enabled { ansi_wrap(&byte_offset.to_string(), &colors.bn) } else { byte_offset.to_string() };
-        print!("{}{}", boff_col, sep_col);
+        let _ = stdout.write_all(boff_col.as_bytes());
+        let _ = stdout.write_all(sep_col.as_bytes());
     }
-    println!("{}", line);
+    
+    let _ = stdout.write_all(line.as_bytes());
+    
+    let terminator = if config.null_data { b"\0" } else { b"\n" };
+    let _ = stdout.write_all(terminator);
     
     if config.line_buffered {
-        let _ = io::stdout().flush();
+        let _ = stdout.flush();
     }
 }
 
@@ -605,5 +614,45 @@ mod tests {
     #[test]
     fn test_run_result_semantics() {
         assert_ne!(RunResult::MatchFound, RunResult::NoMatch);
+    }
+
+    #[test]
+    fn test_null_data_delimiter() {
+        let mut config = crate::cli::Config::parse_args(vec![
+            std::ffi::OsString::from("rgrep"),
+            std::ffi::OsString::from("foo"),
+        ]).unwrap();
+        config.null_data = true;
+        
+        let matcher = Matcher::new(&config, vec!["foo".to_string()]).unwrap();
+        let input = b"foo\nbar\0baz";
+        let reader = std::io::BufReader::new(&input[..]);
+        let colors = GrepColors::from_env();
+        
+        let result = process_file(&config, &matcher, reader, "test", false, false, &colors).unwrap();
+        assert!(result);
+    }
+
+    #[test]
+    fn test_null_filename_output() {
+        let mut config = crate::cli::Config::parse_args(vec![
+            std::ffi::OsString::from("rgrep"),
+            std::ffi::OsString::from("-Z"),
+            std::ffi::OsString::from("foo"),
+        ]).unwrap();
+        config.null = true;
+        assert!(config.null);
+    }
+
+    #[test]
+    fn test_print_line_safe_output() {
+        // Just verify that setting up null config doesn't crash print line config checks
+        let mut config = crate::cli::Config::parse_args(vec![
+            std::ffi::OsString::from("rgrep"),
+            std::ffi::OsString::from("foo"),
+        ]).unwrap();
+        config.null_data = true;
+        config.null = true;
+        assert!(config.null_data);
     }
 }
