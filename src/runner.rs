@@ -7,6 +7,8 @@ use std::collections::VecDeque;
 use walkdir::WalkDir;
 use memmap2::MmapOptions;
 use globset::{Glob, GlobSet, GlobSetBuilder};
+use std::io::IsTerminal;
+use crate::output::{GrepColors, ansi_wrap};
 
 pub fn load_pattern_file(path: &str) -> Result<Vec<String>, Box<dyn Error>> {
     let file = File::open(path).map_err(|e| format!("{}: {}", path, e))?;
@@ -63,10 +65,17 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         _ => files_to_search.len() > 1 || config.recursive || config.dereference_recursive,
     };
 
+    let color_enabled = match config.color.as_str() {
+        "always" => true,
+        "auto" => std::io::stdout().is_terminal(),
+        _ => false,
+    };
+    let colors = GrepColors::from_env();
+
     for filename in files_to_search {
         if filename == "-" {
             let reader = BufReader::new(io::stdin());
-            process_file(&config, &matcher, reader, &config.label, print_filename)?;
+            process_file(&config, &matcher, reader, &config.label, print_filename, color_enabled, &colors)?;
         } else {
             let file = match File::open(&filename) {
                 Ok(f) => f,
@@ -81,13 +90,13 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             if config.mmap {
                 if let Ok(mmap) = unsafe { MmapOptions::new().map(&file) } {
                     let cursor = Cursor::new(&mmap[..]);
-                    process_file(&config, &matcher, cursor, &filename, print_filename)?;
+                    process_file(&config, &matcher, cursor, &filename, print_filename, color_enabled, &colors)?;
                     continue;
                 }
             }
 
             let reader = BufReader::new(file);
-            process_file(&config, &matcher, reader, &filename, print_filename)?;
+            process_file(&config, &matcher, reader, &filename, print_filename, color_enabled, &colors)?;
         }
     }
 
@@ -100,6 +109,8 @@ fn process_file<R: BufRead>(
     mut reader: R,
     filename: &str,
     print_filename: bool,
+    color_enabled: bool,
+    colors: &GrepColors,
 ) -> Result<(), Box<dyn Error>> {
     let before_ctx = config.get_before_context();
     let after_ctx = config.get_after_context();
@@ -140,13 +151,21 @@ fn process_file<R: BufRead>(
         }
 
         let mut is_match = false;
+        let mut matches = vec![];
         if config.max_count.map_or(true, |m| match_count < m) {
             is_match = matcher.is_match(line_str);
+            if is_match && (config.only_matching || color_enabled) && !config.invert_match {
+                matches = matcher.find_match_offsets(line_str);
+            }
         }
 
         if is_match {
             has_match = true;
-            match_count += 1;
+            if config.only_matching {
+                match_count += if config.count && matches.len() > 0 { matches.len() } else { 1 };
+            } else {
+                match_count += 1;
+            }
 
             if config.quiet {
                 std::process::exit(0);
@@ -173,21 +192,20 @@ fn process_file<R: BufRead>(
 
                 for (h_line_num, h_byte_offset, h_line) in &history {
                     if *h_line_num > last_printed_line {
-                        print_line(config, filename, print_filename, *h_line_num, *h_byte_offset, h_line, false);
+                        print_line(config, filename, print_filename, *h_line_num, *h_byte_offset, h_line, false, color_enabled, colors);
                         last_printed_line = *h_line_num;
                     }
                 }
                 history.clear();
 
                 if config.only_matching {
-                    let matches = matcher.find_matches(line_str);
-                    for m in matches {
-                        let output = if config.color { format!("\x1b[31;1m{}\x1b[0m", m) } else { m };
-                        print_line(config, filename, print_filename, line_number, byte_offset, &output, true);
+                    for (m_offset, m_str) in matches {
+                        let output = if color_enabled { ansi_wrap(&m_str, &colors.ms) } else { m_str };
+                        print_line(config, filename, print_filename, line_number, byte_offset + m_offset, &output, true, color_enabled, colors);
                     }
                 } else {
-                    let output_line = if config.color { matcher.highlight(line_str) } else { line_str.to_string() };
-                    print_line(config, filename, print_filename, line_number, byte_offset, &output_line, true);
+                    let output_line = if color_enabled { matcher.highlight(line_str, colors) } else { line_str.to_string() };
+                    print_line(config, filename, print_filename, line_number, byte_offset, &output_line, true, color_enabled, colors);
                 }
                 last_printed_line = line_number;
                 print_after = after_ctx;
@@ -195,7 +213,7 @@ fn process_file<R: BufRead>(
         } else {
             if print_after > 0 {
                 if !(config.files_with_matches || config.files_without_match || config.count || config.only_matching) {
-                    print_line(config, filename, print_filename, line_number, byte_offset, line_str, false);
+                    print_line(config, filename, print_filename, line_number, byte_offset, line_str, false, color_enabled, colors);
                 }
                 last_printed_line = line_number;
                 print_after -= 1;
@@ -331,9 +349,9 @@ fn resolve_files(config: &Config, extra_files: Vec<String>) -> Result<Vec<String
     Ok(resolved_files)
 }
 
-fn print_line(config: &Config, filename: &str, print_filename: bool, line_number: usize, byte_offset: usize, line: &str, is_match: bool) {
+fn print_line(config: &Config, filename: &str, print_filename: bool, line_number: usize, byte_offset: usize, line: &str, is_match: bool, color_enabled: bool, colors: &GrepColors) {
     let sep = if is_match { ":" } else { "-" };
-    let sep_col = if config.color { format!("\x1b[36m{}\x1b[0m", sep) } else { sep.to_string() };
+    let sep_col = if color_enabled { ansi_wrap(sep, &colors.se) } else { sep.to_string() };
     let null_sep = "\0";
 
     if config.initial_tab {
@@ -341,7 +359,7 @@ fn print_line(config: &Config, filename: &str, print_filename: bool, line_number
     }
 
     if print_filename {
-        let fname_col = if config.color { format!("\x1b[35m{}\x1b[0m", filename) } else { filename.to_string() };
+        let fname_col = if color_enabled { ansi_wrap(filename, &colors.fn_color) } else { filename.to_string() };
         if config.null {
             print!("{}{}", fname_col, null_sep);
         } else {
@@ -349,11 +367,11 @@ fn print_line(config: &Config, filename: &str, print_filename: bool, line_number
         }
     }
     if config.line_number {
-        let lnum_col = if config.color { format!("\x1b[32m{}\x1b[0m", line_number) } else { line_number.to_string() };
+        let lnum_col = if color_enabled { ansi_wrap(&line_number.to_string(), &colors.ln) } else { line_number.to_string() };
         print!("{}{}", lnum_col, sep_col);
     }
     if config.byte_offset {
-        let boff_col = if config.color { format!("\x1b[32m{}\x1b[0m", byte_offset) } else { byte_offset.to_string() };
+        let boff_col = if color_enabled { ansi_wrap(&byte_offset.to_string(), &colors.bn) } else { byte_offset.to_string() };
         print!("{}{}", boff_col, sep_col);
     }
     println!("{}", line);

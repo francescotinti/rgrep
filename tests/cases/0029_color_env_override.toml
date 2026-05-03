@@ -1,0 +1,8 @@
+name = "color env override"
+args = ["--color=always", "foo"]
+stdin = "foo\n"
+expected_stdout = "\x1b[1;33mfoo\x1b[0m\n"
+expected_exit_code = 0
+
+[env]
+GREP_COLORS = "ms=1;33"

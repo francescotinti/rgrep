@@ -56,8 +56,8 @@ pub struct Config {
     pub devices: Option<String>,
 
     /// Highlight matches in output
-    #[arg(long = "color")]
-    pub color: bool,
+    #[arg(long = "color", default_value = "never", default_missing_value = "always", num_args = 0..=1)]
+    pub color: String,
 
     /// Suppress normal output; instead print the name of each input file from which output would normally have been printed.
     #[arg(short = 'l', long = "files-with-matches")]

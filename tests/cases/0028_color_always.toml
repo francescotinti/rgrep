@@ -1,0 +1,5 @@
+name = "color always"
+args = ["--color=always", "foo"]
+stdin = "foo\n"
+expected_stdout = "\x1b[01;31mfoo\x1b[m\n"
+expected_exit_code = 0

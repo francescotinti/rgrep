@@ -105,19 +105,27 @@ impl<'a> Matcher<'a> {
         }
     }
 
-    pub fn highlight(&self, line: &str) -> String {
+    pub fn highlight(&self, line: &str, colors: &crate::output::GrepColors) -> String {
         if self.config.invert_match {
             return line.to_string();
         }
         
+        let ms_code = &colors.ms;
+        if ms_code.is_empty() {
+            return line.to_string();
+        }
+
         match &self.engine {
-            Engine::Regex(re) => re.replace_all(line, "\x1b[31;1m$0\x1b[0m").into_owned(),
+            Engine::Regex(re) => {
+                let rep = format!("\x1b[{}m$0\x1b[0m", ms_code);
+                re.replace_all(line, rep.as_str()).into_owned()
+            },
             Engine::AhoCorasick(ac) => {
                 let mut result = String::with_capacity(line.len());
                 let mut last_match = 0;
                 for mat in ac.find_iter(line) {
                     result.push_str(&line[last_match..mat.start()]);
-                    result.push_str("\x1b[31;1m");
+                    result.push_str(&format!("\x1b[{}m", ms_code));
                     result.push_str(&line[mat.start()..mat.end()]);
                     result.push_str("\x1b[0m");
                     last_match = mat.end();
@@ -128,13 +136,13 @@ impl<'a> Matcher<'a> {
         }
     }
 
-    pub fn find_matches(&self, line: &str) -> Vec<String> {
+    pub fn find_match_offsets(&self, line: &str) -> Vec<(usize, String)> {
         if self.config.invert_match {
             return vec![]; 
         }
         match &self.engine {
-            Engine::Regex(re) => re.find_iter(line).map(|m| m.as_str().to_string()).collect(),
-            Engine::AhoCorasick(ac) => ac.find_iter(line).map(|m| line[m.start()..m.end()].to_string()).collect(),
+            Engine::Regex(re) => re.find_iter(line).map(|m| (m.start(), m.as_str().to_string())).collect(),
+            Engine::AhoCorasick(ac) => ac.find_iter(line).map(|m| (m.start(), line[m.start()..m.end()].to_string())).collect(),
         }
     }
 }
@@ -143,6 +151,15 @@ impl<'a> Matcher<'a> {
 mod tests {
     use super::*;
     use crate::cli::Config;
+
+    #[test]
+    fn test_find_match_offsets() {
+        let config = Config::parse_args(vec!["rgrep", "foo"]).unwrap();
+        let matcher = Matcher::new(&config, vec!["foo".to_string()]).unwrap();
+        
+        let offsets = matcher.find_match_offsets("foo bar foo");
+        assert_eq!(offsets, vec![(0, "foo".to_string()), (8, "foo".to_string())]);
+    }
 
     #[test]
     fn test_bre_to_ere() {

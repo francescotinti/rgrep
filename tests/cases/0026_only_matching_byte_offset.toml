@@ -1,0 +1,5 @@
+name = "only matching byte offset"
+args = ["-o", "-b", "foo"]
+stdin = "foo bar foo\n"
+expected_stdout = "0:foo\n8:foo\n"
+expected_exit_code = 0

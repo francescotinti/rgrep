@@ -1,0 +1,5 @@
+name = "color never"
+args = ["--color=never", "foo"]
+stdin = "foo\n"
+expected_stdout = "foo\n"
+expected_exit_code = 0

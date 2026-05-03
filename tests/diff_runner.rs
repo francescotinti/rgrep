@@ -30,6 +30,7 @@ struct TestCase {
     expected_to_fail: bool,
     #[serde(default)]
     fixture_files: Vec<FixtureFile>,
+    env: Option<std::collections::HashMap<String, String>>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -53,10 +54,15 @@ fn is_bsd_grep() -> bool {
     !version_str.contains("GNU") && !version_err.contains("GNU")
 }
 
-fn run_command_with_stdin(cmd: &str, args: &[String], stdin_data: &str) -> (i32, String, String) {
+fn run_command_with_stdin(cmd: &str, args: &[String], stdin_data: &str, env: Option<&std::collections::HashMap<String, String>>) -> (i32, String, String) {
     let mut command = Command::new(cmd);
     for arg in args {
         command.arg(arg);
+    }
+    if let Some(e) = env {
+        for (k, v) in e {
+            command.env(k, v);
+        }
     }
     command.stdin(Stdio::piped());
     command.stdout(Stdio::piped());
@@ -119,9 +125,9 @@ fn test_differential() {
             processed_expected = processed_expected.replace("{FIXTURES}", &t_str);
         }
 
-        let (oracle_code, oracle_stdout, _oracle_stderr) = run_command_with_stdin("grep", &processed_args, &case.stdin);
+        let (oracle_code, oracle_stdout, _oracle_stderr) = run_command_with_stdin("grep", &processed_args, &case.stdin, case.env.as_ref());
         
-        let (rgrep_code, rgrep_stdout, rgrep_stderr) = run_command_with_stdin(rgrep_bin, &processed_args, &case.stdin);
+        let (rgrep_code, rgrep_stdout, rgrep_stderr) = run_command_with_stdin(rgrep_bin, &processed_args, &case.stdin, case.env.as_ref());
 
         if let Some(t) = temp_dir_path {
             let _ = fs::remove_dir_all(t);

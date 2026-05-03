@@ -22,4 +22,10 @@ cases = [
     "cases/0021_files_with_matches.toml",
     "cases/0022_files_without_match.toml",
     "cases/0023_combined_n_b.toml",
+    "cases/0024_only_matching_base.toml",
+    "cases/0025_only_matching_line_number.toml",
+    "cases/0026_only_matching_byte_offset.toml",
+    "cases/0027_color_never.toml",
+    "cases/0028_color_always.toml",
+    "cases/0029_color_env_override.toml",
 ]
