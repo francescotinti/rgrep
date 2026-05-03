@@ -1,4 +1,13 @@
 #!/usr/bin/env python3
+# rgrep — GNU grep ported to Rust (test flag cleaner helper)
+# Copyright (c) 2026 Francesco Tinti <francesco.tinti@activemind.it>
+#
+# AI-assisted port:
+#   Architect: Claude Opus 4.7 (1M context, Anthropic)
+#   Implementer: Gemini Antigravity (Google)
+#
+# https://github.com/francescotinti/rgrep
+
 import os
 import glob
 

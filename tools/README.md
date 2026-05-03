@@ -1,4 +1,9 @@
-# tools/convert_gnu_tests.py
+# tools/
+
+> Copyright (c) 2026 Francesco Tinti <francesco.tinti@activemind.it>
+> AI-assisted port: Claude Opus 4.7 (Anthropic) + Gemini Antigravity (Google)
+
+## convert_gnu_tests.py
 
 Script to automatically parse and extract differential testcases from the `gnu-grep/tests` shell scripts into `rgrep`'s TOML format.
 
