@@ -14,6 +14,7 @@ use std::error::Error;
 
 pub enum Engine {
     Regex(Regex),
+    Fancy(fancy_regex::Regex),
     AhoCorasick(AhoCorasick),
     #[cfg(feature = "perl-regexp")]
     Pcre2(pcre2::bytes::Regex),
@@ -99,6 +100,25 @@ impl<'a> Matcher<'a> {
             final_patterns
         };
         
+        let mut fancy_needed = false;
+        
+        // 1. Try compile each pattern individually as syntax check
+        for pat in &final_patterns_escaped {
+            let mut p = pat.clone();
+            if config.line_regexp {
+                p = format!(r"^(?:{})$", p);
+            } else if config.word_regexp {
+                p = format!(r"\b(?:{})\b", p);
+            }
+            if RegexBuilder::new(&p).case_insensitive(ignore_case).build().is_err() {
+                if fancy_regex::Regex::new(&p).is_err() {
+                    return Err(Box::<dyn Error>::from(format!("Invalid regex: {}", pat)));
+                } else {
+                    fancy_needed = true;
+                }
+            }
+        }
+        
         let mut combined = final_patterns_escaped.join("|");
         
         if config.line_regexp {
@@ -107,17 +127,27 @@ impl<'a> Matcher<'a> {
             combined = format!(r"\b(?:{})\b", combined);
         }
         
-        let re = RegexBuilder::new(&combined)
-            .case_insensitive(ignore_case)
-            .build()
-            .map_err(|e| Box::<dyn Error>::from(format!("{}", e)))?;
-
-        Ok(Self { config, engine: Engine::Regex(re) })
+        if fancy_needed {
+            let p = if ignore_case {
+                format!("(?i){}", combined)
+            } else {
+                combined
+            };
+            let re = fancy_regex::Regex::new(&p).map_err(|e| Box::<dyn Error>::from(format!("{}", e)))?;
+            Ok(Self { config, engine: Engine::Fancy(re) })
+        } else {
+            let re = RegexBuilder::new(&combined)
+                .case_insensitive(ignore_case)
+                .build()
+                .map_err(|e| Box::<dyn Error>::from(format!("{}", e)))?;
+            Ok(Self { config, engine: Engine::Regex(re) })
+        }
     }
 
     pub fn is_match(&self, line: &str) -> bool {
         let matches = match &self.engine {
             Engine::Regex(re) => re.is_match(line),
+            Engine::Fancy(re) => re.is_match(line).unwrap_or(false),
             Engine::AhoCorasick(ac) => ac.is_match(line),
             #[cfg(feature = "perl-regexp")]
             Engine::Pcre2(re) => re.is_match(line.as_bytes()).unwrap_or(false),
@@ -144,6 +174,21 @@ impl<'a> Matcher<'a> {
             Engine::Regex(re) => {
                 let rep = format!("\x1b[{}m\x1b[K$0\x1b[m\x1b[K", ms_code);
                 re.replace_all(line, rep.as_str()).into_owned()
+            },
+            Engine::Fancy(re) => {
+                let mut result = String::with_capacity(line.len());
+                let mut last_match = 0;
+                for mat_res in re.find_iter(line) {
+                    if let Ok(mat) = mat_res {
+                        result.push_str(&line[last_match..mat.start()]);
+                        result.push_str(&format!("\x1b[{}m\x1b[K", ms_code));
+                        result.push_str(&line[mat.start()..mat.end()]);
+                        result.push_str("\x1b[m\x1b[K");
+                        last_match = mat.end();
+                    }
+                }
+                result.push_str(&line[last_match..]);
+                result
             },
             Engine::AhoCorasick(ac) => {
                 let mut result = String::with_capacity(line.len());
@@ -181,6 +226,7 @@ impl<'a> Matcher<'a> {
         }
         match &self.engine {
             Engine::Regex(re) => re.find_iter(line).map(|m| (m.start(), m.as_str().to_string())).collect(),
+            Engine::Fancy(re) => re.find_iter(line).flatten().map(|m| (m.start(), m.as_str().to_string())).collect(),
             Engine::AhoCorasick(ac) => ac.find_iter(line).map(|m| (m.start(), line[m.start()..m.end()].to_string())).collect(),
             #[cfg(feature = "perl-regexp")]
             Engine::Pcre2(re) => re.find_iter(line.as_bytes()).flatten().map(|m| (m.start(), line[m.start()..m.end()].to_string())).collect(),
@@ -351,5 +397,30 @@ mod tests {
         let matcher = Matcher::new(&config, vec!["h.*o".to_string()]).unwrap();
         assert!(!matcher.is_match("say hello to him"));
         assert!(matcher.is_match("literal h.*o string"));
+    }
+
+    #[test]
+    fn test_backref_simple() {
+        let mut config = get_base_config(r"(.+)\1");
+        config.extended_regexp = true;
+        let matcher = Matcher::new(&config, vec![r"(.+)\1".to_string()]).unwrap();
+        assert!(matcher.is_match("abab"));
+        assert!(!matcher.is_match("abc"));
+    }
+
+    #[test]
+    fn test_backref_named_in_pattern() {
+        let mut config = get_base_config(r"(\d+)-\1");
+        config.extended_regexp = true;
+        let matcher = Matcher::new(&config, vec![r"(\d+)-\1".to_string()]).unwrap();
+        assert!(matcher.is_match("42-42"));
+        assert!(!matcher.is_match("42-43"));
+    }
+
+    #[test]
+    fn test_multi_e_invalid_validation() {
+        let config = get_base_config("[");
+        let matcher = Matcher::new(&config, vec!["[".to_string(), "]".to_string()]);
+        assert!(matcher.is_err());
     }
 }

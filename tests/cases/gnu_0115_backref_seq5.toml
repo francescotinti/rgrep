@@ -5,5 +5,3 @@ expected_stdout = ""
 expected_exit_code = 1
 source = "gnu-grep/tests/backref"
 
-expected_to_fail = true
-expected_to_fail_reason = "Backreferences not supported by regex crate (D-M6)"

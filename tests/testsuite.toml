@@ -73,6 +73,7 @@ cases = [
     "cases/0072_pcre_lookahead.toml",
     "cases/0073_pcre_lookbehind.toml",
     "cases/0074_pcre_backreference.toml",
+    "cases/0075_multi_e_invalid_validation.toml",
     "cases/gnu_0075_backref_seq1.toml",
     "cases/gnu_0076_backref_seq2.toml",
     "cases/gnu_0077_backref_seq3.toml",

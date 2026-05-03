@@ -1,0 +1,6 @@
+name = "multi -e invalid pattern validation"
+args = ["-e", "[", "-e", "]"]
+stdin = "anything\n"
+expected_stdout = ""
+expected_exit_code = 2
+source = "regression test for D-NEW-5 fix"
