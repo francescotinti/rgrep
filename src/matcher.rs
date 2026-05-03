@@ -117,7 +117,7 @@ impl<'a> Matcher<'a> {
 
         match &self.engine {
             Engine::Regex(re) => {
-                let rep = format!("\x1b[{}m$0\x1b[0m", ms_code);
+                let rep = format!("\x1b[{}m\x1b[K$0\x1b[m\x1b[K", ms_code);
                 re.replace_all(line, rep.as_str()).into_owned()
             },
             Engine::AhoCorasick(ac) => {
@@ -125,9 +125,9 @@ impl<'a> Matcher<'a> {
                 let mut last_match = 0;
                 for mat in ac.find_iter(line) {
                     result.push_str(&line[last_match..mat.start()]);
-                    result.push_str(&format!("\x1b[{}m", ms_code));
+                    result.push_str(&format!("\x1b[{}m\x1b[K", ms_code));
                     result.push_str(&line[mat.start()..mat.end()]);
-                    result.push_str("\x1b[0m");
+                    result.push_str("\x1b[m\x1b[K");
                     last_match = mat.end();
                 }
                 result.push_str(&line[last_match..]);
@@ -154,7 +154,7 @@ mod tests {
 
     #[test]
     fn test_find_match_offsets() {
-        let config = Config::parse_args(vec!["rgrep", "foo"]).unwrap();
+        let config = Config::parse_args(vec![std::ffi::OsString::from("rgrep"), std::ffi::OsString::from("foo")]).unwrap();
         let matcher = Matcher::new(&config, vec!["foo".to_string()]).unwrap();
         
         let offsets = matcher.find_match_offsets("foo bar foo");
@@ -196,7 +196,7 @@ mod tests {
             count: false,
             word_regexp: false,
             recursive: false,
-            color: false,
+            color: "never".to_string(),
             files_with_matches: false,
             files_without_match: false,
             quiet: false,

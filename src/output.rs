@@ -55,7 +55,7 @@ pub fn ansi_wrap(text: &str, code: &str) -> String {
     if code.is_empty() {
         text.to_string()
     } else {
-        format!("\x1b[{}m{}\x1b[0m", code, text)
+        format!("\x1b[{}m\x1b[K{}\x1b[m\x1b[K", code, text)
     }
 }
 
@@ -65,17 +65,17 @@ mod tests {
 
     #[test]
     fn test_grep_colors_parser() {
-        std::env::set_var("GREP_COLORS", "ms=1;33:fn=34:unknown=99");
+        unsafe { std::env::set_var("GREP_COLORS", "ms=1;33:fn=34:unknown=99"); }
         let colors = GrepColors::from_env();
         assert_eq!(colors.ms, "1;33");
         assert_eq!(colors.fn_color, "34");
         assert_eq!(colors.ln, "32"); // default
-        std::env::remove_var("GREP_COLORS");
+        unsafe { std::env::remove_var("GREP_COLORS"); }
     }
 
     #[test]
     fn test_ansi_wrap() {
-        assert_eq!(ansi_wrap("foo", "01;31"), "\x1b[01;31mfoo\x1b[0m");
+        assert_eq!(ansi_wrap("foo", "01;31"), "\x1b[01;31m\x1b[Kfoo\x1b[m\x1b[K");
         assert_eq!(ansi_wrap("bar", ""), "bar");
     }
 }

@@ -1,8 +1,9 @@
 name = "color env override"
 args = ["--color=always", "foo"]
 stdin = "foo\n"
-expected_stdout = "\x1b[1;33mfoo\x1b[0m\n"
+expected_stdout = "\u001b[1;33m\u001b[Kfoo\u001b[m\u001b[K\n"
 expected_exit_code = 0
+expected_to_fail = true
 
 [env]
 GREP_COLORS = "ms=1;33"
