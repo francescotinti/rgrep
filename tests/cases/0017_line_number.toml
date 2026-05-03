@@ -1,0 +1,5 @@
+name = "line number"
+args = ["-n", "foo"]
+stdin = "bar\nfoo\nbaz\nfoo bar\n"
+expected_stdout = "2:foo\n4:foo bar\n"
+expected_exit_code = 0

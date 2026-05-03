@@ -15,4 +15,11 @@ cases = [
     "cases/0014_combined_e_f.toml",
     "cases/0015_empty_pattern.toml",
     "cases/0016_pattern_file_missing.toml",
+    "cases/0017_line_number.toml",
+    "cases/0018_byte_offset.toml",
+    "cases/0019_with_filename.toml",
+    "cases/0020_no_filename.toml",
+    "cases/0021_files_with_matches.toml",
+    "cases/0022_files_without_match.toml",
+    "cases/0023_combined_n_b.toml",
 ]

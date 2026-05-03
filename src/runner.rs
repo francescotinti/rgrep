@@ -57,13 +57,11 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let matcher = Matcher::new(&config, raw_patterns)?;
     let files_to_search = resolve_files(&config, extra_files)?;
     
-    let mut print_filename = files_to_search.len() > 1;
-    if config.no_filename {
-        print_filename = false;
-    }
-    if config.with_filename {
-        print_filename = true;
-    }
+    let print_filename = match (config.with_filename, config.no_filename) {
+        (true, _) => true,
+        (_, true) => false,
+        _ => files_to_search.len() > 1 || config.recursive || config.dereference_recursive,
+    };
 
     for filename in files_to_search {
         if filename == "-" {
@@ -154,7 +152,9 @@ fn process_file<R: BufRead>(
                 std::process::exit(0);
             }
 
-            if config.files_with_matches || config.files_without_match || config.count {
+            if config.files_with_matches || config.files_without_match {
+                break;
+            } else if config.count {
                 // Do nothing here
             } else {
                 let mut first_to_print = line_number;

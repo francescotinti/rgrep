@@ -76,11 +76,11 @@ pub struct Config {
     pub no_messages: bool,
 
     /// Suppress the prefixing of file names on output.
-    #[arg(short = 'h', long = "no-filename")]
+    #[arg(short = 'h', long = "no-filename", overrides_with("with_filename"))]
     pub no_filename: bool,
 
     /// Print the file name for each match.
-    #[arg(short = 'H', long = "with-filename")]
+    #[arg(short = 'H', long = "with-filename", overrides_with("no_filename"))]
     pub with_filename: bool,
 
     /// Print only the matched (non-empty) parts of a matching line, with each such part on a separate output line.

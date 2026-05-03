@@ -1,0 +1,13 @@
+name = "no filename"
+args = ["-h", "foo", "{FIXTURES}/f1.txt", "{FIXTURES}/f2.txt"]
+stdin = "irrelevant\n"
+expected_stdout = "foo\nfoo\n"
+expected_exit_code = 0
+
+[[fixture_files]]
+name = "f1.txt"
+content = "foo\n"
+
+[[fixture_files]]
+name = "f2.txt"
+content = "foo\n"

@@ -1,0 +1,13 @@
+name = "files without match"
+args = ["-L", "foo", "{FIXTURES}/match.txt", "{FIXTURES}/nomatch.txt"]
+stdin = "irrelevant\n"
+expected_stdout = "{FIXTURES}/nomatch.txt\n"
+expected_exit_code = 0
+
+[[fixture_files]]
+name = "match.txt"
+content = "foo\n"
+
+[[fixture_files]]
+name = "nomatch.txt"
+content = "bar\n"

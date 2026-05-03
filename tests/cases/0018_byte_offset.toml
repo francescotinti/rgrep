@@ -1,0 +1,5 @@
+name = "byte offset"
+args = ["-b", "foo"]
+stdin = "bar\nfoo\nbaz\n"
+expected_stdout = "4:foo\n"
+expected_exit_code = 0

@@ -1,0 +1,5 @@
+name = "combined n b"
+args = ["-nb", "foo"]
+stdin = "bar\nfoo\n"
+expected_stdout = "2:4:foo\n"
+expected_exit_code = 0

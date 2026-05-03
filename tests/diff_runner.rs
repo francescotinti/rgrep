@@ -110,11 +110,13 @@ fn test_differential() {
         }
 
         let mut processed_args = case.args.clone();
+        let mut processed_expected = case.expected_stdout.clone();
         if let Some(t) = &temp_dir_path {
             let t_str = t.to_string_lossy();
             for arg in &mut processed_args {
                 *arg = arg.replace("{FIXTURES}", &t_str);
             }
+            processed_expected = processed_expected.replace("{FIXTURES}", &t_str);
         }
 
         let (oracle_code, oracle_stdout, _oracle_stderr) = run_command_with_stdin("grep", &processed_args, &case.stdin);
@@ -155,6 +157,6 @@ fn test_differential() {
         }
         
         assert_eq!(oracle_code, case.expected_exit_code, "Oracle grep produced unexpected exit code");
-        assert_eq!(oracle_stdout, case.expected_stdout, "Oracle grep produced unexpected output");
+        assert_eq!(oracle_stdout, processed_expected, "Oracle grep produced unexpected output");
     }
 }
