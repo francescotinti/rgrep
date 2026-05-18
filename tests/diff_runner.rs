@@ -96,7 +96,7 @@ fn run_command_with_stdin(
 
     let mut child = command
         .spawn()
-        .unwrap_or_else(|_| panic!("Failed to spawn {}", cmd));
+        .unwrap_or_else(|_| panic!("Failed to spawn {cmd}"));
 
     if let Some(mut stdin) = child.stdin.take() {
         stdin
@@ -128,9 +128,9 @@ fn test_differential() {
 
     for case_path in testsuite.cases {
         let case_content = fs::read_to_string(Path::new("tests").join(&case_path))
-            .unwrap_or_else(|_| panic!("Failed to read {}", case_path));
-        let case: TestCase = toml::from_str(&case_content)
-            .unwrap_or_else(|_| panic!("Failed to parse {}", case_path));
+            .unwrap_or_else(|_| panic!("Failed to read {case_path}"));
+        let case: TestCase =
+            toml::from_str(&case_content).unwrap_or_else(|_| panic!("Failed to parse {case_path}"));
 
         if case.skip_if_bsd && is_bsd {
             eprintln!("[skip] {} (bsd grep) - {}", case.name, case.skip_reason);
@@ -149,7 +149,7 @@ fn test_differential() {
         if !case.fixture_files.is_empty() {
             let t = std::env::temp_dir().join(format!(
                 "testag-grep-fixtures-{}",
-                case.name.replace(" ", "_")
+                case.name.replace(' ', "_")
             ));
             let _ = fs::remove_dir_all(&t);
             fs::create_dir_all(&t).unwrap();
@@ -193,14 +193,14 @@ fn test_differential() {
             let mut o_stdout = oracle_stdout.clone();
             if case.sort_output {
                 let mut r_lines: Vec<&str> = r_stdout.lines().collect();
-                r_lines.sort();
+                r_lines.sort_unstable();
                 r_stdout = r_lines.join("\n");
                 if !r_stdout.is_empty() {
                     r_stdout.push('\n');
                 }
 
                 let mut o_lines: Vec<&str> = o_stdout.lines().collect();
-                o_lines.sort();
+                o_lines.sort_unstable();
                 o_stdout = o_lines.join("\n");
                 if !o_stdout.is_empty() {
                     o_stdout.push('\n');
@@ -253,14 +253,14 @@ fn test_differential() {
         let mut final_expected = processed_expected.clone();
         if case.sort_output {
             let mut o_lines: Vec<&str> = final_oracle.lines().collect();
-            o_lines.sort();
+            o_lines.sort_unstable();
             final_oracle = o_lines.join("\n");
             if !final_oracle.is_empty() {
                 final_oracle.push('\n');
             }
 
             let mut e_lines: Vec<&str> = final_expected.lines().collect();
-            e_lines.sort();
+            e_lines.sort_unstable();
             final_expected = e_lines.join("\n");
             if !final_expected.is_empty() {
                 final_expected.push('\n');
@@ -277,7 +277,7 @@ fn test_differential() {
 
     if !failures.is_empty() {
         for f in &failures {
-            eprintln!("{}", f);
+            eprintln!("{f}");
             eprintln!("--------------------------------------------------");
         }
         panic!("{} differential tests failed!", failures.len());

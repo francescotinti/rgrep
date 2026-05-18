@@ -28,13 +28,16 @@ impl Default for GrepColors {
             ln: "32".to_string(),
             bn: "32".to_string(),
             se: "36".to_string(),
-            sl: "".to_string(),
-            cx: "".to_string(),
+            sl: String::new(),
+            cx: String::new(),
         }
     }
 }
 
 impl GrepColors {
+    /// Build a `GrepColors` table by parsing the `GREP_COLORS` env variable
+    /// on top of the GNU grep defaults (red bold matches, magenta filename, …).
+    #[must_use]
     pub fn from_env() -> Self {
         let mut colors = Self::default();
         if let Ok(val) = std::env::var("GREP_COLORS") {
@@ -58,11 +61,14 @@ impl GrepColors {
     }
 }
 
+/// Wrap `text` with the SGR escape sequence `code` (and a terminating reset),
+/// or return it unchanged when `code` is empty.
+#[must_use]
 pub fn ansi_wrap(text: &str, code: &str) -> String {
     if code.is_empty() {
         text.to_string()
     } else {
-        format!("\x1b[{}m\x1b[K{}\x1b[m\x1b[K", code, text)
+        format!("\x1b[{code}m\x1b[K{text}\x1b[m\x1b[K")
     }
 }
 

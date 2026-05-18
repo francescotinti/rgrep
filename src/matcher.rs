@@ -8,9 +8,9 @@
 // https://github.com/francescotinti/rgrep
 
 use crate::cli::Config;
+use crate::error::RgrepError;
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder};
 use regex::{Regex, RegexBuilder};
-use std::error::Error;
 
 pub enum Engine {
     Regex(Regex),
@@ -25,6 +25,7 @@ pub struct Matcher<'a> {
     engine: Engine,
 }
 
+#[must_use]
 pub fn bre_to_ere(pattern: &str) -> String {
     let mut ere = String::with_capacity(pattern.len());
     let mut chars = pattern.chars().peekable();
@@ -59,7 +60,13 @@ pub fn bre_to_ere(pattern: &str) -> String {
 }
 
 impl<'a> Matcher<'a> {
-    pub fn new(config: &'a Config, raw_patterns: Vec<String>) -> Result<Self, Box<dyn Error>> {
+    /// Build a `Matcher` from the user `Config` and the collected raw patterns.
+    ///
+    /// # Errors
+    /// Returns `RgrepError::InvalidRegex` if a pattern cannot be compiled by
+    /// any of the supported engines, or `RgrepError::PcreUnavailable` if `-P`
+    /// is requested in a build without the `perl-regexp` feature.
+    pub fn new(config: &'a Config, raw_patterns: Vec<String>) -> Result<Self, RgrepError> {
         let is_basic = config.basic_regexp
             || (!config.extended_regexp && !config.fixed_strings && !config.perl_regexp);
 
@@ -73,8 +80,7 @@ impl<'a> Matcher<'a> {
 
         #[cfg(not(feature = "perl-regexp"))]
         if config.perl_regexp {
-            eprintln!("rgrep: -P only supported when compiled with --features perl-regexp");
-            std::process::exit(2);
+            return Err(RgrepError::PcreUnavailable);
         }
 
         #[cfg(feature = "perl-regexp")]
@@ -85,7 +91,7 @@ impl<'a> Matcher<'a> {
             builder.utf(true).jit(true);
             let re = builder
                 .build(&pat)
-                .map_err(|e| Box::<dyn Error>::from(format!("{}", e)))?;
+                .map_err(|e| RgrepError::InvalidRegex(e.to_string()))?;
             return Ok(Self {
                 config,
                 engine: Engine::Pcre2(re),
@@ -96,7 +102,7 @@ impl<'a> Matcher<'a> {
             let ac = AhoCorasickBuilder::new()
                 .ascii_case_insensitive(ignore_case)
                 .build(&final_patterns)
-                .map_err(|e| Box::<dyn Error>::from(format!("{}", e)))?;
+                .map_err(|e| RgrepError::InvalidRegex(e.to_string()))?;
             return Ok(Self {
                 config,
                 engine: Engine::AhoCorasick(ac),
@@ -118,9 +124,9 @@ impl<'a> Matcher<'a> {
         for pat in &final_patterns_escaped {
             let mut p = pat.clone();
             if config.line_regexp {
-                p = format!(r"^(?:{})$", p);
+                p = format!(r"^(?:{p})$");
             } else if config.word_regexp {
-                p = format!(r"\b(?:{})\b", p);
+                p = format!(r"\b(?:{p})\b");
             }
             if RegexBuilder::new(&p)
                 .case_insensitive(ignore_case)
@@ -128,29 +134,28 @@ impl<'a> Matcher<'a> {
                 .is_err()
             {
                 if fancy_regex::Regex::new(&p).is_err() {
-                    return Err(Box::<dyn Error>::from(format!("Invalid regex: {}", pat)));
-                } else {
-                    fancy_needed = true;
+                    return Err(RgrepError::InvalidRegex(pat.clone()));
                 }
+                fancy_needed = true;
             }
         }
 
         let mut combined = final_patterns_escaped.join("|");
 
         if config.line_regexp {
-            combined = format!(r"^(?:{})$", combined);
+            combined = format!(r"^(?:{combined})$");
         } else if config.word_regexp {
-            combined = format!(r"\b(?:{})\b", combined);
+            combined = format!(r"\b(?:{combined})\b");
         }
 
         if fancy_needed {
             let p = if ignore_case {
-                format!("(?i){}", combined)
+                format!("(?i){combined}")
             } else {
                 combined
             };
-            let re = fancy_regex::Regex::new(&p)
-                .map_err(|e| Box::<dyn Error>::from(format!("{}", e)))?;
+            let re =
+                fancy_regex::Regex::new(&p).map_err(|e| RgrepError::InvalidRegex(e.to_string()))?;
             Ok(Self {
                 config,
                 engine: Engine::Fancy(re),
@@ -159,7 +164,7 @@ impl<'a> Matcher<'a> {
             let re = RegexBuilder::new(&combined)
                 .case_insensitive(ignore_case)
                 .build()
-                .map_err(|e| Box::<dyn Error>::from(format!("{}", e)))?;
+                .map_err(|e| RgrepError::InvalidRegex(e.to_string()))?;
             Ok(Self {
                 config,
                 engine: Engine::Regex(re),
@@ -167,6 +172,7 @@ impl<'a> Matcher<'a> {
         }
     }
 
+    #[must_use]
     pub fn is_match(&self, line: &str) -> bool {
         let matches = match &self.engine {
             Engine::Regex(re) => re.is_match(line),
@@ -183,6 +189,7 @@ impl<'a> Matcher<'a> {
         }
     }
 
+    #[must_use]
     pub fn highlight(&self, line: &str, colors: &crate::output::GrepColors) -> String {
         if self.config.invert_match {
             return line.to_string();
@@ -195,7 +202,7 @@ impl<'a> Matcher<'a> {
 
         match &self.engine {
             Engine::Regex(re) => {
-                let rep = format!("\x1b[{}m\x1b[K$0\x1b[m\x1b[K", ms_code);
+                let rep = format!("\x1b[{ms_code}m\x1b[K$0\x1b[m\x1b[K");
                 re.replace_all(line, rep.as_str()).into_owned()
             }
             Engine::Fancy(re) => {
@@ -203,7 +210,9 @@ impl<'a> Matcher<'a> {
                 let mut last_match = 0;
                 for mat in re.find_iter(line).flatten() {
                     result.push_str(&line[last_match..mat.start()]);
-                    result.push_str(&format!("\x1b[{}m\x1b[K", ms_code));
+                    result.push_str("\x1b[");
+                    result.push_str(ms_code);
+                    result.push_str("m\x1b[K");
                     result.push_str(&line[mat.start()..mat.end()]);
                     result.push_str("\x1b[m\x1b[K");
                     last_match = mat.end();
@@ -216,7 +225,9 @@ impl<'a> Matcher<'a> {
                 let mut last_match = 0;
                 for mat in ac.find_iter(line) {
                     result.push_str(&line[last_match..mat.start()]);
-                    result.push_str(&format!("\x1b[{}m\x1b[K", ms_code));
+                    result.push_str("\x1b[");
+                    result.push_str(ms_code);
+                    result.push_str("m\x1b[K");
                     result.push_str(&line[mat.start()..mat.end()]);
                     result.push_str("\x1b[m\x1b[K");
                     last_match = mat.end();
@@ -230,7 +241,9 @@ impl<'a> Matcher<'a> {
                 let mut last_match = 0;
                 for mat in re.find_iter(line.as_bytes()).flatten() {
                     result.push_str(&line[last_match..mat.start()]);
-                    result.push_str(&format!("\x1b[{}m\x1b[K", ms_code));
+                    result.push_str("\x1b[");
+                    result.push_str(ms_code);
+                    result.push_str("m\x1b[K");
                     result.push_str(&line[mat.start()..mat.end()]);
                     result.push_str("\x1b[m\x1b[K");
                     last_match = mat.end();
@@ -241,6 +254,7 @@ impl<'a> Matcher<'a> {
         }
     }
 
+    #[must_use]
     pub fn find_match_offsets(&self, line: &str) -> Vec<(usize, String)> {
         if self.config.invert_match {
             return vec![];

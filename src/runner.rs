@@ -8,25 +8,38 @@
 // https://github.com/francescotinti/rgrep
 
 use crate::cli::Config;
+use crate::error::RgrepError;
 use crate::matcher::Matcher;
 use crate::output::{GrepColors, ansi_wrap};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use memmap2::MmapOptions;
 use std::collections::VecDeque;
-use std::error::Error;
 use std::fs::{self, File};
 use std::io::IsTerminal;
 use std::io::{self, BufRead, BufReader, Cursor, Write};
 use walkdir::WalkDir;
 
-pub fn load_pattern_file(path: &str) -> Result<Vec<String>, Box<dyn Error>> {
-    let file = File::open(path).map_err(|e| format!("{}: {}", path, e))?;
+/// Load patterns from a file (one pattern per line, CRLF tolerant).
+///
+/// # Errors
+/// Returns `RgrepError::Io` if the file cannot be opened or read.
+pub fn load_pattern_file(path: &str) -> Result<Vec<String>, RgrepError> {
+    let file = File::open(path).map_err(|source| RgrepError::Io {
+        path: path.to_string(),
+        source,
+    })?;
     let mut reader = BufReader::new(file);
     let mut patterns = Vec::new();
     let mut buffer = Vec::new();
     loop {
         buffer.clear();
-        let bytes_read = reader.read_until(b'\n', &mut buffer)?;
+        let bytes_read =
+            reader
+                .read_until(b'\n', &mut buffer)
+                .map_err(|source| RgrepError::Io {
+                    path: path.to_string(),
+                    source,
+                })?;
         if bytes_read == 0 {
             break;
         }
@@ -42,13 +55,81 @@ pub fn load_pattern_file(path: &str) -> Result<Vec<String>, Box<dyn Error>> {
     Ok(patterns)
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum RunResult {
     MatchFound,
     NoMatch,
 }
 
-pub fn run(config: Config) -> Result<RunResult, Box<dyn Error>> {
+/// Bundle of print-time parameters that stay invariant across every line of a
+/// single file search (replaces the 9-argument [`print_line`] signature).
+struct PrintCtx<'a> {
+    config: &'a Config,
+    filename: &'a str,
+    print_filename: bool,
+    color_enabled: bool,
+    colors: &'a GrepColors,
+}
+
+/// Mutable per-file search state extracted from [`bufread_search`]:
+/// before-context ring buffer, the after-context countdown, the last printed
+/// line cursor and the running match counter.
+struct MatchContext {
+    history: VecDeque<(usize, usize, String)>,
+    print_after: usize,
+    last_printed_line: usize,
+    match_count: usize,
+    before_ctx: usize,
+    after_ctx: usize,
+}
+
+impl MatchContext {
+    fn new(before_ctx: usize, after_ctx: usize) -> Self {
+        Self {
+            history: VecDeque::with_capacity(before_ctx),
+            print_after: 0,
+            last_printed_line: 0,
+            match_count: 0,
+            before_ctx,
+            after_ctx,
+        }
+    }
+
+    fn record_context_line(&mut self, line_number: usize, byte_offset: usize, line: &str) {
+        if self.before_ctx == 0 {
+            return;
+        }
+        if self.history.len() == self.before_ctx {
+            self.history.pop_front();
+        }
+        self.history
+            .push_back((line_number, byte_offset, line.to_string()));
+    }
+
+    fn first_unprinted_history_line(&self, fallback: usize) -> usize {
+        for (h_line, _, _) in &self.history {
+            if *h_line > self.last_printed_line {
+                return *h_line;
+            }
+        }
+        fallback
+    }
+
+    fn needs_separator(&self, first_to_print: usize) -> bool {
+        self.last_printed_line > 0
+            && first_to_print > self.last_printed_line + 1
+            && (self.before_ctx > 0 || self.after_ctx > 0)
+    }
+}
+
+/// Run a grep invocation end-to-end based on a parsed [`Config`].
+///
+/// # Errors
+/// Returns `RgrepError::InvalidRegex` for pattern compilation failures,
+/// `RgrepError::Io` for file open/read errors, `RgrepError::InvalidGlob` for
+/// bad `--include`/`--exclude` patterns and `RgrepError::Silent` when one or
+/// more file-level errors were already reported to stderr.
+pub fn run(config: Config) -> Result<RunResult, RgrepError> {
     let mut raw_patterns = Vec::new();
 
     for p in &config.regexp {
@@ -92,17 +173,16 @@ pub fn run(config: Config) -> Result<RunResult, Box<dyn Error>> {
 
     for filename in files_to_search {
         if filename == "-" {
-            let stdin = io::stdin();
-            let reader = stdin.lock();
-            if bufread_search(
-                &config,
-                &matcher,
-                reader,
-                &config.label,
+            let pctx = PrintCtx {
+                config: &config,
+                filename: &config.label,
                 print_filename,
                 color_enabled,
-                &colors,
-            )? {
+                colors: &colors,
+            };
+            let stdin = io::stdin();
+            let reader = stdin.lock();
+            if bufread_search(&pctx, &matcher, reader)? {
                 any_match = true;
                 if config.quiet {
                     return Ok(RunResult::MatchFound);
@@ -113,11 +193,19 @@ pub fn run(config: Config) -> Result<RunResult, Box<dyn Error>> {
                 Ok(f) => f,
                 Err(e) => {
                     if !config.no_messages {
-                        eprintln!("rgrep: {}: {}", filename, e);
+                        eprintln!("rgrep: {filename}: {e}");
                     }
                     has_error = true;
                     continue;
                 }
+            };
+
+            let pctx = PrintCtx {
+                config: &config,
+                filename: &filename,
+                print_filename,
+                color_enabled,
+                colors: &colors,
             };
 
             let metadata = match file.metadata() {
@@ -125,15 +213,7 @@ pub fn run(config: Config) -> Result<RunResult, Box<dyn Error>> {
                 Err(_) => {
                     // Fallback to bufread if metadata fails for some reason
                     let reader = BufReader::new(file);
-                    if bufread_search(
-                        &config,
-                        &matcher,
-                        reader,
-                        &filename,
-                        print_filename,
-                        color_enabled,
-                        &colors,
-                    )? {
+                    if bufread_search(&pctx, &matcher, reader)? {
                         any_match = true;
                         if config.quiet {
                             return Ok(RunResult::MatchFound);
@@ -144,36 +224,12 @@ pub fn run(config: Config) -> Result<RunResult, Box<dyn Error>> {
             };
             let use_mmap = config.mmap && metadata.is_file() && metadata.len() > 0;
             let result = if use_mmap {
-                match try_mmap_search(
-                    &file,
-                    &config,
-                    &matcher,
-                    &filename,
-                    print_filename,
-                    color_enabled,
-                    &colors,
-                ) {
+                match try_mmap_search(&file, &pctx, &matcher) {
                     Ok(r) => r,
-                    Err(_) => bufread_search(
-                        &config,
-                        &matcher,
-                        BufReader::new(file),
-                        &filename,
-                        print_filename,
-                        color_enabled,
-                        &colors,
-                    )?,
+                    Err(_) => bufread_search(&pctx, &matcher, BufReader::new(file))?,
                 }
             } else {
-                bufread_search(
-                    &config,
-                    &matcher,
-                    BufReader::new(file),
-                    &filename,
-                    print_filename,
-                    color_enabled,
-                    &colors,
-                )?
+                bufread_search(&pctx, &matcher, BufReader::new(file))?
             };
 
             if result {
@@ -186,7 +242,7 @@ pub fn run(config: Config) -> Result<RunResult, Box<dyn Error>> {
     }
 
     if has_error {
-        return Err("".into());
+        return Err(RgrepError::Silent);
     }
 
     if any_match {
@@ -196,75 +252,39 @@ pub fn run(config: Config) -> Result<RunResult, Box<dyn Error>> {
     }
 }
 
-fn try_mmap_search(
-    file: &File,
-    config: &Config,
-    matcher: &Matcher,
-    filename: &str,
-    print_filename: bool,
-    color_enabled: bool,
-    colors: &GrepColors,
-) -> io::Result<bool> {
+fn try_mmap_search(file: &File, pctx: &PrintCtx, matcher: &Matcher) -> Result<bool, RgrepError> {
+    // SAFETY: We assume the file is not modified or truncated by another
+    // process for the duration of the mmap. This matches the GNU grep
+    // behavior, which also relies on this assumption (and prints a warning
+    // in some cases when the file shrinks mid-read). For grep's read-only
+    // use case, the risk surface is acceptable: undefined behavior occurs
+    // only if a concurrent writer truncates the file below the mmap'd
+    // length, in which case the OS may deliver SIGBUS on access.
     let mmap = unsafe { MmapOptions::new().map(file)? };
     let bytes: &[u8] = &mmap;
-    search_buffer(
-        bytes,
-        config,
-        matcher,
-        filename,
-        print_filename,
-        color_enabled,
-        colors,
-    )
-    .map_err(|e| io::Error::other(e.to_string()))
-}
-
-fn search_buffer(
-    buf: &[u8],
-    config: &Config,
-    matcher: &Matcher,
-    filename: &str,
-    print_filename: bool,
-    color_enabled: bool,
-    colors: &GrepColors,
-) -> Result<bool, Box<dyn Error>> {
-    let cursor = Cursor::new(buf);
-    bufread_search(
-        config,
-        matcher,
-        cursor,
-        filename,
-        print_filename,
-        color_enabled,
-        colors,
-    )
+    let cursor = Cursor::new(bytes);
+    bufread_search(pctx, matcher, cursor)
 }
 
 fn bufread_search<R: BufRead>(
-    config: &Config,
+    pctx: &PrintCtx,
     matcher: &Matcher,
     mut reader: R,
-    filename: &str,
-    print_filename: bool,
-    color_enabled: bool,
-    colors: &GrepColors,
-) -> Result<bool, Box<dyn Error>> {
-    let before_ctx = config.get_before_context();
-    let after_ctx = config.get_after_context();
-    let delimiter = if config.null_data { 0 } else { b'\n' };
+) -> Result<bool, RgrepError> {
+    let config = pctx.config;
+    let before_ctx = config.before_context_lines();
+    let after_ctx = config.after_context_lines();
+    let delimiter: u8 = if config.null_data { 0 } else { b'\n' };
 
-    let mut line_number = 1;
-    let mut byte_offset = 0;
-    let mut match_count = 0;
+    let mut line_number: usize = 1;
+    let mut byte_offset: usize = 0;
     let mut has_match = false;
 
-    let mut history: VecDeque<(usize, usize, String)> = VecDeque::with_capacity(before_ctx);
-    let mut print_after = 0;
-    let mut last_printed_line = 0;
+    let mut ctx = MatchContext::new(before_ctx, after_ctx);
 
     let mut buffer = Vec::new();
 
-    let binary_action = config.get_binary_action();
+    let binary_action = config.binary_action();
     let mut is_binary = false;
 
     if binary_action != crate::cli::BinaryAction::Text
@@ -285,7 +305,7 @@ fn bufread_search<R: BufRead>(
             Ok(n) => n,
             Err(e) => {
                 if !config.no_messages {
-                    eprintln!("rgrep: {}: {}", filename, e);
+                    eprintln!("rgrep: {}: {e}", pctx.filename);
                 }
                 break;
             }
@@ -303,9 +323,9 @@ fn bufread_search<R: BufRead>(
 
         let mut is_match = false;
         let mut matches = vec![];
-        if config.max_count.is_none_or(|m| match_count < m) {
+        if config.max_count.is_none_or(|m| ctx.match_count < m) {
             is_match = matcher.is_match(line_str);
-            if is_match && (config.only_matching || color_enabled) && !config.invert_match {
+            if is_match && (config.only_matching || pctx.color_enabled) && !config.invert_match {
                 matches = matcher.find_match_offsets(line_str);
             }
         }
@@ -313,13 +333,13 @@ fn bufread_search<R: BufRead>(
         if is_match {
             has_match = true;
             if config.only_matching {
-                match_count += if config.count && !matches.is_empty() {
+                ctx.match_count += if config.count && !matches.is_empty() {
                     matches.len()
                 } else {
                     1
                 };
             } else {
-                match_count += 1;
+                ctx.match_count += 1;
             }
 
             if config.quiet {
@@ -329,128 +349,48 @@ fn bufread_search<R: BufRead>(
             if is_binary {
                 if config.count || config.files_with_matches || config.files_without_match {
                     break;
-                } else {
-                    println!(
-                        "Binary file {} matches",
-                        if filename == "-" {
-                            &config.label
-                        } else {
-                            filename
-                        }
-                    );
-                    return Ok(true);
                 }
+                let display_name = if pctx.filename == "-" {
+                    config.label.as_str()
+                } else {
+                    pctx.filename
+                };
+                println!("Binary file {display_name} matches");
+                return Ok(true);
             }
 
             if config.files_with_matches || config.files_without_match {
                 break;
             } else if config.count {
-                // Do nothing here
+                // Counting only — no per-line output here.
             } else {
-                let mut first_to_print = line_number;
-                for (h_line_num, _, _) in &history {
-                    if *h_line_num > last_printed_line {
-                        first_to_print = *h_line_num;
-                        break;
-                    }
-                }
-
-                if last_printed_line > 0
-                    && first_to_print > last_printed_line + 1
-                    && (before_ctx > 0 || after_ctx > 0)
-                    && !config.no_group_separator
-                {
-                    println!("{}", config.group_separator);
-                }
-
-                for (h_line_num, h_byte_offset, h_line) in &history {
-                    if *h_line_num > last_printed_line {
-                        print_line(
-                            config,
-                            filename,
-                            print_filename,
-                            *h_line_num,
-                            *h_byte_offset,
-                            h_line,
-                            false,
-                            color_enabled,
-                            colors,
-                        );
-                        last_printed_line = *h_line_num;
-                    }
-                }
-                history.clear();
-
-                if config.only_matching {
-                    for (m_offset, m_str) in matches {
-                        let output = if color_enabled {
-                            ansi_wrap(&m_str, &colors.ms)
-                        } else {
-                            m_str
-                        };
-                        print_line(
-                            config,
-                            filename,
-                            print_filename,
-                            line_number,
-                            byte_offset + m_offset,
-                            &output,
-                            true,
-                            color_enabled,
-                            colors,
-                        );
-                    }
-                } else {
-                    let output_line = if color_enabled {
-                        matcher.highlight(line_str, colors)
-                    } else {
-                        line_str.to_string()
-                    };
-                    print_line(
-                        config,
-                        filename,
-                        print_filename,
-                        line_number,
-                        byte_offset,
-                        &output_line,
-                        true,
-                        color_enabled,
-                        colors,
-                    );
-                }
-                last_printed_line = line_number;
-                print_after = after_ctx;
+                emit_match_block(
+                    pctx,
+                    matcher,
+                    &mut ctx,
+                    line_number,
+                    byte_offset,
+                    line_str,
+                    matches,
+                );
             }
-        } else if print_after > 0 {
+        } else if ctx.print_after > 0 {
             if !(config.files_with_matches
                 || config.files_without_match
                 || config.count
                 || config.only_matching)
             {
-                print_line(
-                    config,
-                    filename,
-                    print_filename,
-                    line_number,
-                    byte_offset,
-                    line_str,
-                    false,
-                    color_enabled,
-                    colors,
-                );
+                print_line(pctx, line_number, byte_offset, line_str, false);
             }
-            last_printed_line = line_number;
-            print_after -= 1;
+            ctx.last_printed_line = line_number;
+            ctx.print_after -= 1;
         } else if before_ctx > 0 {
-            if history.len() == before_ctx && before_ctx > 0 {
-                history.pop_front();
-            }
-            history.push_back((line_number, byte_offset, line_str.to_string()));
+            ctx.record_context_line(line_number, byte_offset, line_str);
         }
 
         if let Some(max) = config.max_count
-            && match_count >= max
-            && print_after == 0
+            && ctx.match_count >= max
+            && ctx.print_after == 0
         {
             break;
         }
@@ -459,25 +399,81 @@ fn bufread_search<R: BufRead>(
         line_number += 1;
     }
 
-    if config.files_without_match && !has_match {
-        let term = if config.null { '\0' } else { '\n' };
-        print!("{}{}", filename, term);
-    } else if config.files_with_matches && has_match {
-        let term = if config.null { '\0' } else { '\n' };
-        print!("{}{}", filename, term);
-    } else if config.count {
-        if print_filename {
-            let sep = if config.null { '\0' } else { ':' };
-            println!("{}{}{}", filename, sep, match_count);
-        } else {
-            println!("{}", match_count);
-        }
-    }
+    emit_trailing_summary(pctx, &ctx, has_match);
 
     Ok(has_match)
 }
 
-fn build_globset(patterns: &[String]) -> Result<GlobSet, Box<dyn Error>> {
+/// Print the before-context history (if any), the match line itself (or its
+/// `--only-matching` slices) and arm the after-context countdown.
+fn emit_match_block(
+    pctx: &PrintCtx,
+    matcher: &Matcher,
+    ctx: &mut MatchContext,
+    line_number: usize,
+    byte_offset: usize,
+    line_str: &str,
+    matches: Vec<(usize, String)>,
+) {
+    let config = pctx.config;
+
+    let first_to_print = ctx.first_unprinted_history_line(line_number);
+    if ctx.needs_separator(first_to_print) && !config.no_group_separator {
+        println!("{}", config.group_separator);
+    }
+
+    let history: Vec<_> = ctx.history.drain(..).collect();
+    for (h_line_num, h_byte_offset, h_line) in history {
+        if h_line_num > ctx.last_printed_line {
+            print_line(pctx, h_line_num, h_byte_offset, &h_line, false);
+            ctx.last_printed_line = h_line_num;
+        }
+    }
+
+    if config.only_matching {
+        for (m_offset, m_str) in matches {
+            let output = if pctx.color_enabled {
+                ansi_wrap(&m_str, &pctx.colors.ms)
+            } else {
+                m_str
+            };
+            print_line(pctx, line_number, byte_offset + m_offset, &output, true);
+        }
+    } else {
+        let output_line = if pctx.color_enabled {
+            matcher.highlight(line_str, pctx.colors)
+        } else {
+            line_str.to_string()
+        };
+        print_line(pctx, line_number, byte_offset, &output_line, true);
+    }
+
+    ctx.last_printed_line = line_number;
+    ctx.print_after = ctx.after_ctx;
+}
+
+/// Emit the per-file trailing summary line: `-l/-L` filename, or `-c` count.
+fn emit_trailing_summary(pctx: &PrintCtx, ctx: &MatchContext, has_match: bool) {
+    let config = pctx.config;
+    let filename = pctx.filename;
+
+    let print_filename_summary =
+        (config.files_without_match && !has_match) || (config.files_with_matches && has_match);
+
+    if print_filename_summary {
+        let term = if config.null { '\0' } else { '\n' };
+        print!("{filename}{term}");
+    } else if config.count {
+        if pctx.print_filename {
+            let sep = if config.null { '\0' } else { ':' };
+            println!("{filename}{sep}{}", ctx.match_count);
+        } else {
+            println!("{}", ctx.match_count);
+        }
+    }
+}
+
+fn build_globset(patterns: &[String]) -> Result<GlobSet, RgrepError> {
     let mut builder = GlobSetBuilder::new();
     for p in patterns {
         builder.add(Glob::new(p)?);
@@ -488,7 +484,7 @@ fn build_globset(patterns: &[String]) -> Result<GlobSet, Box<dyn Error>> {
 fn resolve_files(
     config: &Config,
     extra_files: Vec<String>,
-) -> Result<(Vec<String>, bool), Box<dyn Error>> {
+) -> Result<(Vec<String>, bool), RgrepError> {
     use crate::cli::{DevicesAction, DirectoriesAction};
     use std::os::unix::fs::FileTypeExt;
 
@@ -516,7 +512,7 @@ fn resolve_files(
             }
         } else {
             if !config.no_messages {
-                eprintln!("rgrep: {}: No such file or directory", f);
+                eprintln!("rgrep: {f}: No such file or directory");
             }
             has_error = true;
         }
@@ -546,7 +542,7 @@ fn resolve_files(
                             None => break,
                             Some(Err(e)) => {
                                 if !config.no_messages {
-                                    eprintln!("rgrep: {}", e);
+                                    eprintln!("rgrep: {e}");
                                 }
                                 has_error = true;
                                 continue;
@@ -577,7 +573,7 @@ fn resolve_files(
                     }
                 } else if config.directories == DirectoriesAction::Read {
                     if !config.no_messages {
-                        eprintln!("rgrep: {}: Is a directory", path);
+                        eprintln!("rgrep: {path}: Is a directory");
                     }
                     has_error = true;
                 }
@@ -595,7 +591,7 @@ fn resolve_files(
             }
         } else {
             if !config.no_messages {
-                eprintln!("rgrep: {}: No such file or directory", path);
+                eprintln!("rgrep: {path}: No such file or directory");
             }
             has_error = true;
         }
@@ -604,19 +600,12 @@ fn resolve_files(
     Ok((resolved_files, has_error))
 }
 
-fn print_line(
-    config: &Config,
-    filename: &str,
-    print_filename: bool,
-    line_number: usize,
-    byte_offset: usize,
-    line: &str,
-    is_match: bool,
-    color_enabled: bool,
-    colors: &GrepColors,
-) {
+fn print_line(pctx: &PrintCtx, line_number: usize, byte_offset: usize, line: &str, is_match: bool) {
+    let config = pctx.config;
+    let colors = pctx.colors;
+
     let sep = if is_match { ":" } else { "-" };
-    let sep_col = if color_enabled {
+    let sep_col = if pctx.color_enabled {
         ansi_wrap(sep, &colors.se)
     } else {
         sep.to_string()
@@ -628,11 +617,11 @@ fn print_line(
         let _ = stdout.write_all(b"\t");
     }
 
-    if print_filename {
-        let fname_col = if color_enabled {
-            ansi_wrap(filename, &colors.fn_color)
+    if pctx.print_filename {
+        let fname_col = if pctx.color_enabled {
+            ansi_wrap(pctx.filename, &colors.fn_color)
         } else {
-            filename.to_string()
+            pctx.filename.to_string()
         };
         let _ = stdout.write_all(fname_col.as_bytes());
         if config.null {
@@ -642,7 +631,7 @@ fn print_line(
         }
     }
     if config.line_number {
-        let lnum_col = if color_enabled {
+        let lnum_col = if pctx.color_enabled {
             ansi_wrap(&line_number.to_string(), &colors.ln)
         } else {
             line_number.to_string()
@@ -651,7 +640,7 @@ fn print_line(
         let _ = stdout.write_all(sep_col.as_bytes());
     }
     if config.byte_offset {
-        let boff_col = if color_enabled {
+        let boff_col = if pctx.color_enabled {
             ansi_wrap(&byte_offset.to_string(), &colors.bn)
         } else {
             byte_offset.to_string()
@@ -752,7 +741,7 @@ mod tests {
             if history.len() == capacity {
                 history.pop_front();
             }
-            history.push_back((i, i * 10, format!("line {}", i)));
+            history.push_back((i, i * 10, format!("line {i}")));
         }
 
         assert_eq!(history.len(), 2);
@@ -786,6 +775,20 @@ mod tests {
         assert!(!should_print_separator); // no gap, overlapping or contiguous
     }
 
+    fn make_pctx<'a>(
+        config: &'a Config,
+        filename: &'a str,
+        colors: &'a GrepColors,
+    ) -> PrintCtx<'a> {
+        PrintCtx {
+            config,
+            filename,
+            print_filename: false,
+            color_enabled: false,
+            colors,
+        }
+    }
+
     #[test]
     fn test_limit_max_count() {
         let mut config = crate::cli::Config::parse_args(vec![
@@ -799,9 +802,9 @@ mod tests {
         let input = "foo\nfoo\nfoo\nbar\n";
         let reader = std::io::BufReader::new(input.as_bytes());
         let colors = GrepColors::from_env();
+        let pctx = make_pctx(&config, "test", &colors);
 
-        let result =
-            bufread_search(&config, &matcher, reader, "test", false, false, &colors).unwrap();
+        let result = bufread_search(&pctx, &matcher, reader).unwrap();
         assert!(result); // has match
     }
 
@@ -818,9 +821,9 @@ mod tests {
         let input = "bar\nfoo\nbaz\n";
         let reader = std::io::BufReader::new(input.as_bytes());
         let colors = GrepColors::from_env();
+        let pctx = make_pctx(&config, "test", &colors);
 
-        let result =
-            bufread_search(&config, &matcher, reader, "test", false, false, &colors).unwrap();
+        let result = bufread_search(&pctx, &matcher, reader).unwrap();
         assert!(result); // match found and early exited
     }
 
@@ -842,9 +845,9 @@ mod tests {
         let input = b"foo\nbar\0baz";
         let reader = std::io::BufReader::new(&input[..]);
         let colors = GrepColors::from_env();
+        let pctx = make_pctx(&config, "test", &colors);
 
-        let result =
-            bufread_search(&config, &matcher, reader, "test", false, false, &colors).unwrap();
+        let result = bufread_search(&pctx, &matcher, reader).unwrap();
         assert!(result);
     }
 
@@ -908,18 +911,10 @@ mod tests {
         let input = b"foo\n";
         let cursor = Cursor::new(&input[..]);
         let colors = GrepColors::from_env();
+        let pctx = make_pctx(&config, "(standard input)", &colors);
 
         // This simulates bufread_search being called on stdin despite config.mmap
-        let result = bufread_search(
-            &config,
-            &matcher,
-            cursor,
-            "(standard input)",
-            false,
-            false,
-            &colors,
-        )
-        .unwrap();
+        let result = bufread_search(&pctx, &matcher, cursor).unwrap();
         assert!(result);
     }
 }

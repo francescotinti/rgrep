@@ -20,7 +20,7 @@ fn main() {
         Err(e) => {
             let msg = e.to_string();
             if !msg.is_empty() {
-                eprintln!("rgrep: {}", msg);
+                eprintln!("rgrep: {msg}");
             }
             process::exit(2);
         }

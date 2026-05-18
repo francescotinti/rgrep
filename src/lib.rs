@@ -8,6 +8,7 @@
 // https://github.com/francescotinti/rgrep
 
 pub mod cli;
+pub mod error;
 pub mod matcher;
 pub mod output;
 pub mod runner;

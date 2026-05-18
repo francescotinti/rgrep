@@ -9,26 +9,26 @@
 
 use clap::{Parser, ValueEnum};
 
-#[derive(ValueEnum, Clone, Debug, PartialEq)]
+#[derive(ValueEnum, Clone, Debug, PartialEq, Eq)]
 pub enum DirectoriesAction {
     Read,
     Recurse,
     Skip,
 }
 
-#[derive(ValueEnum, Clone, Debug, PartialEq)]
+#[derive(ValueEnum, Clone, Debug, PartialEq, Eq)]
 pub enum DevicesAction {
     Read,
     Skip,
 }
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum BinaryAction {
     Binary,
     Text,
     WithoutMatch,
 }
 
-#[derive(Parser, Debug, PartialEq)]
+#[derive(Parser, Debug, PartialEq, Eq)]
 #[command(
     author,
     version,
@@ -230,27 +230,41 @@ pub struct Config {
 }
 
 impl Config {
+    /// Parse CLI arguments from an `OsString` iterator.
+    ///
+    /// # Errors
+    /// Returns `clap::error::Error` when the input cannot be parsed (unknown
+    /// flags, missing required argument, invalid value for an enum option).
     pub fn parse_args(
         args: impl IntoIterator<Item = std::ffi::OsString>,
     ) -> clap::error::Result<Self> {
         Self::try_parse_from(args)
     }
 
-    pub fn get_after_context(&self) -> usize {
+    /// Effective `-A` lines of trailing context, combining `--after-context`
+    /// and `--context` (the larger wins, matching GNU grep semantics).
+    #[must_use]
+    pub fn after_context_lines(&self) -> usize {
         std::cmp::max(self.after_context, self.context)
     }
 
-    pub fn get_before_context(&self) -> usize {
+    /// Effective `-B` lines of leading context, combining `--before-context`
+    /// and `--context` (the larger wins, matching GNU grep semantics).
+    #[must_use]
+    pub fn before_context_lines(&self) -> usize {
         std::cmp::max(self.before_context, self.context)
     }
 
-    pub fn get_binary_action(&self) -> BinaryAction {
+    /// Resolve how binary files should be treated, combining `--binary-files`,
+    /// `-a` (`--text`) and `-I` (`--without-match`) flags.
+    #[must_use]
+    pub fn binary_action(&self) -> BinaryAction {
         if let Some(bf) = &self.binary_files {
             match bf.as_str() {
                 "text" => return BinaryAction::Text,
                 "without-match" => return BinaryAction::WithoutMatch,
-                "binary" => return BinaryAction::Binary,
-                _ => return BinaryAction::Binary, // Default if invalid
+                // "binary" + any unknown value fall back to the default action.
+                _ => return BinaryAction::Binary,
             }
         }
         if self.text {

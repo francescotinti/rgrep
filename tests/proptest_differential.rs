@@ -81,7 +81,7 @@ proptest! {
     ) {
         if is_bsd_grep() { return Ok(()); }
 
-        let pat = format!("{}{}", anchor, body);
+        let pat = format!("{anchor}{body}");
         let rgrep_out = run_rgrep(&[&pat], input.as_bytes());
         let oracle_out = run_oracle(&[&pat], input.as_bytes());
 
@@ -97,9 +97,9 @@ proptest! {
         if is_bsd_grep() { return Ok(()); }
 
         let pat = if negate {
-            format!("[^{}]", class_body)
+            format!("[^{class_body}]")
         } else {
-            format!("[{}]", class_body)
+            format!("[{class_body}]")
         };
         let rgrep_out = run_rgrep(&[&pat], input.as_bytes());
         let oracle_out = run_oracle(&[&pat], input.as_bytes());

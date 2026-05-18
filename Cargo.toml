@@ -11,6 +11,7 @@ regex = "1.12.3"
 walkdir = "2.5.0"
 aho-corasick = "1.1"
 fancy-regex = "0.13"
+thiserror = "2"
 
 pcre2 = { version = "0.2.9", optional = true }
 
