@@ -9,15 +9,15 @@
 
 use crate::cli::Config;
 use crate::matcher::Matcher;
-use std::fs::{self, File};
-use std::io::{self, BufRead, BufReader, Cursor, Write};
-use std::error::Error;
-use std::collections::VecDeque;
-use walkdir::WalkDir;
-use memmap2::MmapOptions;
-use globset::{Glob, GlobSet, GlobSetBuilder};
-use std::io::IsTerminal;
 use crate::output::{GrepColors, ansi_wrap};
+use globset::{Glob, GlobSet, GlobSetBuilder};
+use memmap2::MmapOptions;
+use std::collections::VecDeque;
+use std::error::Error;
+use std::fs::{self, File};
+use std::io::IsTerminal;
+use std::io::{self, BufRead, BufReader, Cursor, Write};
+use walkdir::WalkDir;
 
 pub fn load_pattern_file(path: &str) -> Result<Vec<String>, Box<dyn Error>> {
     let file = File::open(path).map_err(|e| format!("{}: {}", path, e))?;
@@ -65,16 +65,16 @@ pub fn run(config: Config) -> Result<RunResult, Box<dyn Error>> {
         if let Some(p) = &config.pattern {
             extra_files.push(p.clone());
         }
-    } else {
-        if let Some(p) = &config.pattern {
-            raw_patterns.push(p.clone());
-        }
+    } else if let Some(p) = &config.pattern {
+        raw_patterns.push(p.clone());
     }
 
     let matcher = Matcher::new(&config, raw_patterns)?;
     let (files_to_search, mut has_error) = resolve_files(&config, extra_files)?;
-    
-    let is_recursive = config.recursive || config.dereference_recursive || config.directories == crate::cli::DirectoriesAction::Recurse;
+
+    let is_recursive = config.recursive
+        || config.dereference_recursive
+        || config.directories == crate::cli::DirectoriesAction::Recurse;
     let print_filename = match (config.with_filename, config.no_filename) {
         (true, _) => true,
         (_, true) => false,
@@ -94,7 +94,15 @@ pub fn run(config: Config) -> Result<RunResult, Box<dyn Error>> {
         if filename == "-" {
             let stdin = io::stdin();
             let reader = stdin.lock();
-            if bufread_search(&config, &matcher, reader, &config.label, print_filename, color_enabled, &colors)? {
+            if bufread_search(
+                &config,
+                &matcher,
+                reader,
+                &config.label,
+                print_filename,
+                color_enabled,
+                &colors,
+            )? {
                 any_match = true;
                 if config.quiet {
                     return Ok(RunResult::MatchFound);
@@ -117,7 +125,15 @@ pub fn run(config: Config) -> Result<RunResult, Box<dyn Error>> {
                 Err(_) => {
                     // Fallback to bufread if metadata fails for some reason
                     let reader = BufReader::new(file);
-                    if bufread_search(&config, &matcher, reader, &filename, print_filename, color_enabled, &colors)? {
+                    if bufread_search(
+                        &config,
+                        &matcher,
+                        reader,
+                        &filename,
+                        print_filename,
+                        color_enabled,
+                        &colors,
+                    )? {
                         any_match = true;
                         if config.quiet {
                             return Ok(RunResult::MatchFound);
@@ -128,12 +144,36 @@ pub fn run(config: Config) -> Result<RunResult, Box<dyn Error>> {
             };
             let use_mmap = config.mmap && metadata.is_file() && metadata.len() > 0;
             let result = if use_mmap {
-                match try_mmap_search(&file, &config, &matcher, &filename, print_filename, color_enabled, &colors) {
+                match try_mmap_search(
+                    &file,
+                    &config,
+                    &matcher,
+                    &filename,
+                    print_filename,
+                    color_enabled,
+                    &colors,
+                ) {
                     Ok(r) => r,
-                    Err(_) => bufread_search(&config, &matcher, BufReader::new(file), &filename, print_filename, color_enabled, &colors)?,
+                    Err(_) => bufread_search(
+                        &config,
+                        &matcher,
+                        BufReader::new(file),
+                        &filename,
+                        print_filename,
+                        color_enabled,
+                        &colors,
+                    )?,
                 }
             } else {
-                bufread_search(&config, &matcher, BufReader::new(file), &filename, print_filename, color_enabled, &colors)?
+                bufread_search(
+                    &config,
+                    &matcher,
+                    BufReader::new(file),
+                    &filename,
+                    print_filename,
+                    color_enabled,
+                    &colors,
+                )?
             };
 
             if result {
@@ -167,8 +207,16 @@ fn try_mmap_search(
 ) -> io::Result<bool> {
     let mmap = unsafe { MmapOptions::new().map(file)? };
     let bytes: &[u8] = &mmap;
-    search_buffer(bytes, config, matcher, filename, print_filename, color_enabled, colors)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+    search_buffer(
+        bytes,
+        config,
+        matcher,
+        filename,
+        print_filename,
+        color_enabled,
+        colors,
+    )
+    .map_err(|e| io::Error::other(e.to_string()))
 }
 
 fn search_buffer(
@@ -181,7 +229,15 @@ fn search_buffer(
     colors: &GrepColors,
 ) -> Result<bool, Box<dyn Error>> {
     let cursor = Cursor::new(buf);
-    bufread_search(config, matcher, cursor, filename, print_filename, color_enabled, colors)
+    bufread_search(
+        config,
+        matcher,
+        cursor,
+        filename,
+        print_filename,
+        color_enabled,
+        colors,
+    )
 }
 
 fn bufread_search<R: BufRead>(
@@ -201,7 +257,7 @@ fn bufread_search<R: BufRead>(
     let mut byte_offset = 0;
     let mut match_count = 0;
     let mut has_match = false;
-    
+
     let mut history: VecDeque<(usize, usize, String)> = VecDeque::with_capacity(before_ctx);
     let mut print_after = 0;
     let mut last_printed_line = 0;
@@ -210,15 +266,15 @@ fn bufread_search<R: BufRead>(
 
     let binary_action = config.get_binary_action();
     let mut is_binary = false;
-    
-    if binary_action != crate::cli::BinaryAction::Text {
-        if let Ok(buf) = reader.fill_buf() {
-            if buf.contains(&0) && delimiter != 0 {
-                is_binary = true;
-                if binary_action == crate::cli::BinaryAction::WithoutMatch {
-                    return Ok(false);
-                }
-            }
+
+    if binary_action != crate::cli::BinaryAction::Text
+        && let Ok(buf) = reader.fill_buf()
+        && buf.contains(&0)
+        && delimiter != 0
+    {
+        is_binary = true;
+        if binary_action == crate::cli::BinaryAction::WithoutMatch {
+            return Ok(false);
         }
     }
 
@@ -234,20 +290,20 @@ fn bufread_search<R: BufRead>(
                 break;
             }
         };
-        
+
         let line_cow = String::from_utf8_lossy(&buffer);
         let mut line_str = line_cow.as_ref();
         if line_str.ends_with(delimiter as char) {
             line_str = &line_str[..line_str.len() - 1];
         }
-        
+
         if !config.binary && delimiter == b'\n' && line_str.ends_with('\r') {
             line_str = &line_str[..line_str.len() - 1];
         }
 
         let mut is_match = false;
         let mut matches = vec![];
-        if config.max_count.map_or(true, |m| match_count < m) {
+        if config.max_count.is_none_or(|m| match_count < m) {
             is_match = matcher.is_match(line_str);
             if is_match && (config.only_matching || color_enabled) && !config.invert_match {
                 matches = matcher.find_match_offsets(line_str);
@@ -257,7 +313,11 @@ fn bufread_search<R: BufRead>(
         if is_match {
             has_match = true;
             if config.only_matching {
-                match_count += if config.count && matches.len() > 0 { matches.len() } else { 1 };
+                match_count += if config.count && !matches.is_empty() {
+                    matches.len()
+                } else {
+                    1
+                };
             } else {
                 match_count += 1;
             }
@@ -270,7 +330,14 @@ fn bufread_search<R: BufRead>(
                 if config.count || config.files_with_matches || config.files_without_match {
                     break;
                 } else {
-                    println!("Binary file {} matches", if filename == "-" { &config.label } else { filename });
+                    println!(
+                        "Binary file {} matches",
+                        if filename == "-" {
+                            &config.label
+                        } else {
+                            filename
+                        }
+                    );
                     return Ok(true);
                 }
             }
@@ -288,15 +355,27 @@ fn bufread_search<R: BufRead>(
                     }
                 }
 
-                if last_printed_line > 0 && first_to_print > last_printed_line + 1 && (before_ctx > 0 || after_ctx > 0) {
-                    if !config.no_group_separator {
-                        println!("{}", config.group_separator);
-                    }
+                if last_printed_line > 0
+                    && first_to_print > last_printed_line + 1
+                    && (before_ctx > 0 || after_ctx > 0)
+                    && !config.no_group_separator
+                {
+                    println!("{}", config.group_separator);
                 }
 
                 for (h_line_num, h_byte_offset, h_line) in &history {
                     if *h_line_num > last_printed_line {
-                        print_line(config, filename, print_filename, *h_line_num, *h_byte_offset, h_line, false, color_enabled, colors);
+                        print_line(
+                            config,
+                            filename,
+                            print_filename,
+                            *h_line_num,
+                            *h_byte_offset,
+                            h_line,
+                            false,
+                            color_enabled,
+                            colors,
+                        );
                         last_printed_line = *h_line_num;
                     }
                 }
@@ -304,35 +383,76 @@ fn bufread_search<R: BufRead>(
 
                 if config.only_matching {
                     for (m_offset, m_str) in matches {
-                        let output = if color_enabled { ansi_wrap(&m_str, &colors.ms) } else { m_str };
-                        print_line(config, filename, print_filename, line_number, byte_offset + m_offset, &output, true, color_enabled, colors);
+                        let output = if color_enabled {
+                            ansi_wrap(&m_str, &colors.ms)
+                        } else {
+                            m_str
+                        };
+                        print_line(
+                            config,
+                            filename,
+                            print_filename,
+                            line_number,
+                            byte_offset + m_offset,
+                            &output,
+                            true,
+                            color_enabled,
+                            colors,
+                        );
                     }
                 } else {
-                    let output_line = if color_enabled { matcher.highlight(line_str, colors) } else { line_str.to_string() };
-                    print_line(config, filename, print_filename, line_number, byte_offset, &output_line, true, color_enabled, colors);
+                    let output_line = if color_enabled {
+                        matcher.highlight(line_str, colors)
+                    } else {
+                        line_str.to_string()
+                    };
+                    print_line(
+                        config,
+                        filename,
+                        print_filename,
+                        line_number,
+                        byte_offset,
+                        &output_line,
+                        true,
+                        color_enabled,
+                        colors,
+                    );
                 }
                 last_printed_line = line_number;
                 print_after = after_ctx;
             }
-        } else {
-            if print_after > 0 {
-                if !(config.files_with_matches || config.files_without_match || config.count || config.only_matching) {
-                    print_line(config, filename, print_filename, line_number, byte_offset, line_str, false, color_enabled, colors);
-                }
-                last_printed_line = line_number;
-                print_after -= 1;
-            } else if before_ctx > 0 {
-                if history.len() == before_ctx && before_ctx > 0 {
-                    history.pop_front();
-                }
-                history.push_back((line_number, byte_offset, line_str.to_string()));
+        } else if print_after > 0 {
+            if !(config.files_with_matches
+                || config.files_without_match
+                || config.count
+                || config.only_matching)
+            {
+                print_line(
+                    config,
+                    filename,
+                    print_filename,
+                    line_number,
+                    byte_offset,
+                    line_str,
+                    false,
+                    color_enabled,
+                    colors,
+                );
             }
+            last_printed_line = line_number;
+            print_after -= 1;
+        } else if before_ctx > 0 {
+            if history.len() == before_ctx && before_ctx > 0 {
+                history.pop_front();
+            }
+            history.push_back((line_number, byte_offset, line_str.to_string()));
         }
 
-        if let Some(max) = config.max_count {
-            if match_count >= max && print_after == 0 {
-                break;
-            }
+        if let Some(max) = config.max_count
+            && match_count >= max
+            && print_after == 0
+        {
+            break;
         }
 
         byte_offset += bytes_read;
@@ -365,8 +485,11 @@ fn build_globset(patterns: &[String]) -> Result<GlobSet, Box<dyn Error>> {
     Ok(builder.build()?)
 }
 
-fn resolve_files(config: &Config, extra_files: Vec<String>) -> Result<(Vec<String>, bool), Box<dyn Error>> {
-    use crate::cli::{DirectoriesAction, DevicesAction};
+fn resolve_files(
+    config: &Config,
+    extra_files: Vec<String>,
+) -> Result<(Vec<String>, bool), Box<dyn Error>> {
+    use crate::cli::{DevicesAction, DirectoriesAction};
     use std::os::unix::fs::FileTypeExt;
 
     let mut resolved_files = Vec::new();
@@ -382,7 +505,7 @@ fn resolve_files(config: &Config, extra_files: Vec<String>) -> Result<(Vec<Strin
     };
 
     let include_set = build_globset(&config.include)?;
-    
+
     let mut exclude_patterns = config.exclude.clone();
     if let Some(f) = &config.exclude_from {
         if let Ok(content) = fs::read_to_string(f) {
@@ -399,7 +522,7 @@ fn resolve_files(config: &Config, extra_files: Vec<String>) -> Result<(Vec<Strin
         }
     }
     let exclude_set = build_globset(&exclude_patterns)?;
-    
+
     let exclude_dir_set = build_globset(&config.exclude_dir)?;
 
     for path in &files {
@@ -410,10 +533,14 @@ fn resolve_files(config: &Config, extra_files: Vec<String>) -> Result<(Vec<Strin
 
         let metadata = fs::metadata(path);
         if let Ok(meta) = metadata {
-            let is_recursive = config.recursive || config.dereference_recursive || config.directories == DirectoriesAction::Recurse;
+            let is_recursive = config.recursive
+                || config.dereference_recursive
+                || config.directories == DirectoriesAction::Recurse;
             if meta.is_dir() {
                 if is_recursive {
-                    let mut it = WalkDir::new(path).follow_links(config.dereference_recursive).into_iter();
+                    let mut it = WalkDir::new(path)
+                        .follow_links(config.dereference_recursive)
+                        .into_iter();
                     loop {
                         let entry = match it.next() {
                             None => break,
@@ -423,14 +550,16 @@ fn resolve_files(config: &Config, extra_files: Vec<String>) -> Result<(Vec<Strin
                                 }
                                 has_error = true;
                                 continue;
-                            },
+                            }
                             Some(Ok(entry)) => entry,
                         };
 
                         let file_name_os = entry.file_name();
 
                         if entry.file_type().is_dir() {
-                            if !config.exclude_dir.is_empty() && exclude_dir_set.is_match(file_name_os) {
+                            if !config.exclude_dir.is_empty()
+                                && exclude_dir_set.is_match(file_name_os)
+                            {
                                 it.skip_current_dir();
                             }
                             continue;
@@ -454,10 +583,13 @@ fn resolve_files(config: &Config, extra_files: Vec<String>) -> Result<(Vec<Strin
                 }
             } else {
                 let file_type = meta.file_type();
-                if file_type.is_fifo() || file_type.is_socket() || file_type.is_block_device() || file_type.is_char_device() {
-                    if config.devices == DevicesAction::Skip {
-                        continue;
-                    }
+                if (file_type.is_fifo()
+                    || file_type.is_socket()
+                    || file_type.is_block_device()
+                    || file_type.is_char_device())
+                    && config.devices == DevicesAction::Skip
+                {
+                    continue;
                 }
                 resolved_files.push(path.clone());
             }
@@ -472,18 +604,36 @@ fn resolve_files(config: &Config, extra_files: Vec<String>) -> Result<(Vec<Strin
     Ok((resolved_files, has_error))
 }
 
-fn print_line(config: &Config, filename: &str, print_filename: bool, line_number: usize, byte_offset: usize, line: &str, is_match: bool, color_enabled: bool, colors: &GrepColors) {
+fn print_line(
+    config: &Config,
+    filename: &str,
+    print_filename: bool,
+    line_number: usize,
+    byte_offset: usize,
+    line: &str,
+    is_match: bool,
+    color_enabled: bool,
+    colors: &GrepColors,
+) {
     let sep = if is_match { ":" } else { "-" };
-    let sep_col = if color_enabled { ansi_wrap(sep, &colors.se) } else { sep.to_string() };
+    let sep_col = if color_enabled {
+        ansi_wrap(sep, &colors.se)
+    } else {
+        sep.to_string()
+    };
 
     let mut stdout = io::stdout();
-    
+
     if config.initial_tab {
         let _ = stdout.write_all(b"\t");
     }
 
     if print_filename {
-        let fname_col = if color_enabled { ansi_wrap(filename, &colors.fn_color) } else { filename.to_string() };
+        let fname_col = if color_enabled {
+            ansi_wrap(filename, &colors.fn_color)
+        } else {
+            filename.to_string()
+        };
         let _ = stdout.write_all(fname_col.as_bytes());
         if config.null {
             let _ = stdout.write_all(b"\0");
@@ -492,21 +642,29 @@ fn print_line(config: &Config, filename: &str, print_filename: bool, line_number
         }
     }
     if config.line_number {
-        let lnum_col = if color_enabled { ansi_wrap(&line_number.to_string(), &colors.ln) } else { line_number.to_string() };
+        let lnum_col = if color_enabled {
+            ansi_wrap(&line_number.to_string(), &colors.ln)
+        } else {
+            line_number.to_string()
+        };
         let _ = stdout.write_all(lnum_col.as_bytes());
         let _ = stdout.write_all(sep_col.as_bytes());
     }
     if config.byte_offset {
-        let boff_col = if color_enabled { ansi_wrap(&byte_offset.to_string(), &colors.bn) } else { byte_offset.to_string() };
+        let boff_col = if color_enabled {
+            ansi_wrap(&byte_offset.to_string(), &colors.bn)
+        } else {
+            byte_offset.to_string()
+        };
         let _ = stdout.write_all(boff_col.as_bytes());
         let _ = stdout.write_all(sep_col.as_bytes());
     }
-    
+
     let _ = stdout.write_all(line.as_bytes());
-    
+
     let terminator = if config.null_data { b"\0" } else { b"\n" };
     let _ = stdout.write_all(terminator);
-    
+
     if config.line_buffered {
         let _ = stdout.flush();
     }
@@ -521,7 +679,7 @@ mod tests {
         let dir = std::env::temp_dir().join("test_pattern_loader");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        
+
         // Empty file
         let empty_path = dir.join("empty.txt");
         std::fs::write(&empty_path, "").unwrap();
@@ -539,7 +697,7 @@ mod tests {
         std::fs::write(&crlf_path, "foo\r\nbar\r\n").unwrap();
         let pats = load_pattern_file(crlf_path.to_str().unwrap()).unwrap();
         assert_eq!(pats, vec!["foo", "bar"]);
-        
+
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -588,15 +746,15 @@ mod tests {
         use std::collections::VecDeque;
         let capacity = 2;
         let mut history: VecDeque<(usize, usize, String)> = VecDeque::with_capacity(capacity);
-        
+
         // Push 3 items into capacity 2 buffer
         for i in 1..=3 {
             if history.len() == capacity {
                 history.pop_front();
             }
-            history.push_back((i, i*10, format!("line {}", i)));
+            history.push_back((i, i * 10, format!("line {}", i)));
         }
-        
+
         assert_eq!(history.len(), 2);
         assert_eq!(history.front().unwrap().0, 2);
         assert_eq!(history.back().unwrap().0, 3);
@@ -608,8 +766,10 @@ mod tests {
         let after_ctx = 1;
         let last_printed = 5;
         let first_to_print = 8;
-        
-        let should_print_separator = last_printed > 0 && first_to_print > last_printed + 1 && (before_ctx > 0 || after_ctx > 0);
+
+        let should_print_separator = last_printed > 0
+            && first_to_print > last_printed + 1
+            && (before_ctx > 0 || after_ctx > 0);
         assert!(should_print_separator); // gap of 2 lines
     }
 
@@ -619,8 +779,10 @@ mod tests {
         let after_ctx = 1;
         let last_printed = 5;
         let first_to_print = 6;
-        
-        let should_print_separator = last_printed > 0 && first_to_print > last_printed + 1 && (before_ctx > 0 || after_ctx > 0);
+
+        let should_print_separator = last_printed > 0
+            && first_to_print > last_printed + 1
+            && (before_ctx > 0 || after_ctx > 0);
         assert!(!should_print_separator); // no gap, overlapping or contiguous
     }
 
@@ -629,15 +791,17 @@ mod tests {
         let mut config = crate::cli::Config::parse_args(vec![
             std::ffi::OsString::from("rgrep"),
             std::ffi::OsString::from("foo"),
-        ]).unwrap();
+        ])
+        .unwrap();
         config.max_count = Some(2);
-        
+
         let matcher = Matcher::new(&config, vec!["foo".to_string()]).unwrap();
         let input = "foo\nfoo\nfoo\nbar\n";
         let reader = std::io::BufReader::new(input.as_bytes());
         let colors = GrepColors::from_env();
-        
-        let result = bufread_search(&config, &matcher, reader, "test", false, false, &colors).unwrap();
+
+        let result =
+            bufread_search(&config, &matcher, reader, "test", false, false, &colors).unwrap();
         assert!(result); // has match
     }
 
@@ -646,15 +810,17 @@ mod tests {
         let mut config = crate::cli::Config::parse_args(vec![
             std::ffi::OsString::from("rgrep"),
             std::ffi::OsString::from("foo"),
-        ]).unwrap();
+        ])
+        .unwrap();
         config.quiet = true;
-        
+
         let matcher = Matcher::new(&config, vec!["foo".to_string()]).unwrap();
         let input = "bar\nfoo\nbaz\n";
         let reader = std::io::BufReader::new(input.as_bytes());
         let colors = GrepColors::from_env();
-        
-        let result = bufread_search(&config, &matcher, reader, "test", false, false, &colors).unwrap();
+
+        let result =
+            bufread_search(&config, &matcher, reader, "test", false, false, &colors).unwrap();
         assert!(result); // match found and early exited
     }
 
@@ -668,15 +834,17 @@ mod tests {
         let mut config = crate::cli::Config::parse_args(vec![
             std::ffi::OsString::from("rgrep"),
             std::ffi::OsString::from("foo"),
-        ]).unwrap();
+        ])
+        .unwrap();
         config.null_data = true;
-        
+
         let matcher = Matcher::new(&config, vec!["foo".to_string()]).unwrap();
         let input = b"foo\nbar\0baz";
         let reader = std::io::BufReader::new(&input[..]);
         let colors = GrepColors::from_env();
-        
-        let result = bufread_search(&config, &matcher, reader, "test", false, false, &colors).unwrap();
+
+        let result =
+            bufread_search(&config, &matcher, reader, "test", false, false, &colors).unwrap();
         assert!(result);
     }
 
@@ -686,7 +854,8 @@ mod tests {
             std::ffi::OsString::from("rgrep"),
             std::ffi::OsString::from("-Z"),
             std::ffi::OsString::from("foo"),
-        ]).unwrap();
+        ])
+        .unwrap();
         config.null = true;
         assert!(config.null);
     }
@@ -697,7 +866,8 @@ mod tests {
         let mut config = crate::cli::Config::parse_args(vec![
             std::ffi::OsString::from("rgrep"),
             std::ffi::OsString::from("foo"),
-        ]).unwrap();
+        ])
+        .unwrap();
         config.null_data = true;
         config.null = true;
         assert!(config.null_data);
@@ -710,13 +880,14 @@ mod tests {
             std::ffi::OsString::from("rgrep"),
             std::ffi::OsString::from("--mmap"),
             std::ffi::OsString::from("foo"),
-        ]).unwrap();
+        ])
+        .unwrap();
         config.mmap = true;
-        
+
         let temp_path = std::env::temp_dir().join("test_mmap_rgrep.txt");
         let mut file = std::fs::File::create(&temp_path).unwrap();
         file.write_all(b"foo\nbar\nfoo\n").unwrap();
-        
+
         let metadata = std::fs::metadata(&temp_path).unwrap();
         assert!(metadata.is_file());
         assert!(metadata.len() > 0);
@@ -729,16 +900,26 @@ mod tests {
             std::ffi::OsString::from("rgrep"),
             std::ffi::OsString::from("--mmap"),
             std::ffi::OsString::from("foo"),
-        ]).unwrap();
+        ])
+        .unwrap();
         config.mmap = true;
-        
+
         let matcher = Matcher::new(&config, vec!["foo".to_string()]).unwrap();
         let input = b"foo\n";
         let cursor = Cursor::new(&input[..]);
         let colors = GrepColors::from_env();
-        
+
         // This simulates bufread_search being called on stdin despite config.mmap
-        let result = bufread_search(&config, &matcher, cursor, "(standard input)", false, false, &colors).unwrap();
+        let result = bufread_search(
+            &config,
+            &matcher,
+            cursor,
+            "(standard input)",
+            false,
+            false,
+            &colors,
+        )
+        .unwrap();
         assert!(result);
     }
 }

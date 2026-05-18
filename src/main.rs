@@ -13,7 +13,7 @@ use std::process;
 
 fn main() {
     let config = Config::parse();
-    
+
     match rgrep::runner::run(config) {
         Ok(rgrep::runner::RunResult::MatchFound) => process::exit(0),
         Ok(rgrep::runner::RunResult::NoMatch) => process::exit(1),

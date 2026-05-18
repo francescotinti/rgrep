@@ -60,16 +60,17 @@ pub fn bre_to_ere(pattern: &str) -> String {
 
 impl<'a> Matcher<'a> {
     pub fn new(config: &'a Config, raw_patterns: Vec<String>) -> Result<Self, Box<dyn Error>> {
-        let is_basic = config.basic_regexp || (!config.extended_regexp && !config.fixed_strings && !config.perl_regexp);
-        
+        let is_basic = config.basic_regexp
+            || (!config.extended_regexp && !config.fixed_strings && !config.perl_regexp);
+
         let final_patterns: Vec<String> = if is_basic {
             raw_patterns.into_iter().map(|p| bre_to_ere(&p)).collect()
         } else {
             raw_patterns
         };
-        
+
         let ignore_case = config.ignore_case && !config.no_ignore_case;
-        
+
         #[cfg(not(feature = "perl-regexp"))]
         if config.perl_regexp {
             eprintln!("rgrep: -P only supported when compiled with --features perl-regexp");
@@ -82,26 +83,37 @@ impl<'a> Matcher<'a> {
             let mut builder = pcre2::bytes::RegexBuilder::new();
             builder.caseless(ignore_case);
             builder.utf(true).jit(true);
-            let re = builder.build(&pat).map_err(|e| Box::<dyn Error>::from(format!("{}", e)))?;
-            return Ok(Self { config, engine: Engine::Pcre2(re) });
+            let re = builder
+                .build(&pat)
+                .map_err(|e| Box::<dyn Error>::from(format!("{}", e)))?;
+            return Ok(Self {
+                config,
+                engine: Engine::Pcre2(re),
+            });
         }
-        
+
         if config.fixed_strings && !config.word_regexp && !config.line_regexp {
             let ac = AhoCorasickBuilder::new()
                 .ascii_case_insensitive(ignore_case)
                 .build(&final_patterns)
                 .map_err(|e| Box::<dyn Error>::from(format!("{}", e)))?;
-            return Ok(Self { config, engine: Engine::AhoCorasick(ac) });
+            return Ok(Self {
+                config,
+                engine: Engine::AhoCorasick(ac),
+            });
         }
-        
+
         let final_patterns_escaped: Vec<String> = if config.fixed_strings {
-            final_patterns.into_iter().map(|p| regex::escape(&p)).collect()
+            final_patterns
+                .into_iter()
+                .map(|p| regex::escape(&p))
+                .collect()
         } else {
             final_patterns
         };
-        
+
         let mut fancy_needed = false;
-        
+
         // 1. Try compile each pattern individually as syntax check
         for pat in &final_patterns_escaped {
             let mut p = pat.clone();
@@ -110,7 +122,11 @@ impl<'a> Matcher<'a> {
             } else if config.word_regexp {
                 p = format!(r"\b(?:{})\b", p);
             }
-            if RegexBuilder::new(&p).case_insensitive(ignore_case).build().is_err() {
+            if RegexBuilder::new(&p)
+                .case_insensitive(ignore_case)
+                .build()
+                .is_err()
+            {
                 if fancy_regex::Regex::new(&p).is_err() {
                     return Err(Box::<dyn Error>::from(format!("Invalid regex: {}", pat)));
                 } else {
@@ -118,29 +134,36 @@ impl<'a> Matcher<'a> {
                 }
             }
         }
-        
+
         let mut combined = final_patterns_escaped.join("|");
-        
+
         if config.line_regexp {
             combined = format!(r"^(?:{})$", combined);
         } else if config.word_regexp {
             combined = format!(r"\b(?:{})\b", combined);
         }
-        
+
         if fancy_needed {
             let p = if ignore_case {
                 format!("(?i){}", combined)
             } else {
                 combined
             };
-            let re = fancy_regex::Regex::new(&p).map_err(|e| Box::<dyn Error>::from(format!("{}", e)))?;
-            Ok(Self { config, engine: Engine::Fancy(re) })
+            let re = fancy_regex::Regex::new(&p)
+                .map_err(|e| Box::<dyn Error>::from(format!("{}", e)))?;
+            Ok(Self {
+                config,
+                engine: Engine::Fancy(re),
+            })
         } else {
             let re = RegexBuilder::new(&combined)
                 .case_insensitive(ignore_case)
                 .build()
                 .map_err(|e| Box::<dyn Error>::from(format!("{}", e)))?;
-            Ok(Self { config, engine: Engine::Regex(re) })
+            Ok(Self {
+                config,
+                engine: Engine::Regex(re),
+            })
         }
     }
 
@@ -164,7 +187,7 @@ impl<'a> Matcher<'a> {
         if self.config.invert_match {
             return line.to_string();
         }
-        
+
         let ms_code = &colors.ms;
         if ms_code.is_empty() {
             return line.to_string();
@@ -174,22 +197,20 @@ impl<'a> Matcher<'a> {
             Engine::Regex(re) => {
                 let rep = format!("\x1b[{}m\x1b[K$0\x1b[m\x1b[K", ms_code);
                 re.replace_all(line, rep.as_str()).into_owned()
-            },
+            }
             Engine::Fancy(re) => {
                 let mut result = String::with_capacity(line.len());
                 let mut last_match = 0;
-                for mat_res in re.find_iter(line) {
-                    if let Ok(mat) = mat_res {
-                        result.push_str(&line[last_match..mat.start()]);
-                        result.push_str(&format!("\x1b[{}m\x1b[K", ms_code));
-                        result.push_str(&line[mat.start()..mat.end()]);
-                        result.push_str("\x1b[m\x1b[K");
-                        last_match = mat.end();
-                    }
+                for mat in re.find_iter(line).flatten() {
+                    result.push_str(&line[last_match..mat.start()]);
+                    result.push_str(&format!("\x1b[{}m\x1b[K", ms_code));
+                    result.push_str(&line[mat.start()..mat.end()]);
+                    result.push_str("\x1b[m\x1b[K");
+                    last_match = mat.end();
                 }
                 result.push_str(&line[last_match..]);
                 result
-            },
+            }
             Engine::AhoCorasick(ac) => {
                 let mut result = String::with_capacity(line.len());
                 let mut last_match = 0;
@@ -202,7 +223,7 @@ impl<'a> Matcher<'a> {
                 }
                 result.push_str(&line[last_match..]);
                 result
-            },
+            }
             #[cfg(feature = "perl-regexp")]
             Engine::Pcre2(re) => {
                 let mut result = String::with_capacity(line.len());
@@ -222,14 +243,28 @@ impl<'a> Matcher<'a> {
 
     pub fn find_match_offsets(&self, line: &str) -> Vec<(usize, String)> {
         if self.config.invert_match {
-            return vec![]; 
+            return vec![];
         }
         match &self.engine {
-            Engine::Regex(re) => re.find_iter(line).map(|m| (m.start(), m.as_str().to_string())).collect(),
-            Engine::Fancy(re) => re.find_iter(line).flatten().map(|m| (m.start(), m.as_str().to_string())).collect(),
-            Engine::AhoCorasick(ac) => ac.find_iter(line).map(|m| (m.start(), line[m.start()..m.end()].to_string())).collect(),
+            Engine::Regex(re) => re
+                .find_iter(line)
+                .map(|m| (m.start(), m.as_str().to_string()))
+                .collect(),
+            Engine::Fancy(re) => re
+                .find_iter(line)
+                .flatten()
+                .map(|m| (m.start(), m.as_str().to_string()))
+                .collect(),
+            Engine::AhoCorasick(ac) => ac
+                .find_iter(line)
+                .map(|m| (m.start(), line[m.start()..m.end()].to_string()))
+                .collect(),
             #[cfg(feature = "perl-regexp")]
-            Engine::Pcre2(re) => re.find_iter(line.as_bytes()).flatten().map(|m| (m.start(), line[m.start()..m.end()].to_string())).collect(),
+            Engine::Pcre2(re) => re
+                .find_iter(line.as_bytes())
+                .flatten()
+                .map(|m| (m.start(), line[m.start()..m.end()].to_string()))
+                .collect(),
         }
     }
 }
@@ -241,11 +276,18 @@ mod tests {
 
     #[test]
     fn test_find_match_offsets() {
-        let config = Config::parse_args(vec![std::ffi::OsString::from("rgrep"), std::ffi::OsString::from("foo")]).unwrap();
+        let config = Config::parse_args(vec![
+            std::ffi::OsString::from("rgrep"),
+            std::ffi::OsString::from("foo"),
+        ])
+        .unwrap();
         let matcher = Matcher::new(&config, vec!["foo".to_string()]).unwrap();
-        
+
         let offsets = matcher.find_match_offsets("foo bar foo");
-        assert_eq!(offsets, vec![(0, "foo".to_string()), (8, "foo".to_string())]);
+        assert_eq!(
+            offsets,
+            vec![(0, "foo".to_string()), (8, "foo".to_string())]
+        );
     }
 
     #[test]
@@ -354,7 +396,7 @@ mod tests {
         assert!(!matcher.is_match("hello world"));
         assert!(matcher.is_match("bye world"));
     }
-    
+
     #[test]
     fn test_is_match_word_regexp() {
         let mut config = get_base_config("hello");
@@ -363,7 +405,7 @@ mod tests {
         assert!(matcher.is_match("say hello to him"));
         assert!(!matcher.is_match("say helloworld to him"));
     }
-    
+
     #[test]
     fn test_is_match_line_regexp() {
         let mut config = get_base_config("hello");
@@ -384,7 +426,8 @@ mod tests {
     fn test_multiple_patterns() {
         let mut config = get_base_config("hello");
         config.regexp = vec!["world".to_string()];
-        let matcher = Matcher::new(&config, vec!["hello".to_string(), "world".to_string()]).unwrap();
+        let matcher =
+            Matcher::new(&config, vec!["hello".to_string(), "world".to_string()]).unwrap();
         assert!(matcher.is_match("say hello to him"));
         assert!(matcher.is_match("what a beautiful world"));
         assert!(!matcher.is_match("something else entirely"));

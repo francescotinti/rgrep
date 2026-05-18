@@ -29,7 +29,12 @@ pub enum BinaryAction {
 }
 
 #[derive(Parser, Debug, PartialEq)]
-#[command(author, version, about = "A Rust implementation of GNU grep", disable_help_flag = true)]
+#[command(
+    author,
+    version,
+    about = "A Rust implementation of GNU grep",
+    disable_help_flag = true
+)]
 pub struct Config {
     /// Interpret PATTERNS as extended regular expressions.
     #[arg(short = 'E', long = "extended-regexp", overrides_with_all = ["basic_regexp", "fixed_strings", "perl_regexp"])]
@@ -225,7 +230,9 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn parse_args(args: impl IntoIterator<Item = std::ffi::OsString>) -> clap::error::Result<Self> {
+    pub fn parse_args(
+        args: impl IntoIterator<Item = std::ffi::OsString>,
+    ) -> clap::error::Result<Self> {
         Self::try_parse_from(args)
     }
 
@@ -262,22 +269,50 @@ mod tests {
 
     #[test]
     fn test_directories_action_parsing() {
-        let config = Config::parse_args(vec![std::ffi::OsString::from("rgrep"), std::ffi::OsString::from("-d"), std::ffi::OsString::from("read"), std::ffi::OsString::from("pat")]).unwrap();
+        let config = Config::parse_args(vec![
+            std::ffi::OsString::from("rgrep"),
+            std::ffi::OsString::from("-d"),
+            std::ffi::OsString::from("read"),
+            std::ffi::OsString::from("pat"),
+        ])
+        .unwrap();
         assert_eq!(config.directories, DirectoriesAction::Read);
 
-        let config2 = Config::parse_args(vec![std::ffi::OsString::from("rgrep"), std::ffi::OsString::from("--directories=skip"), std::ffi::OsString::from("pat")]).unwrap();
+        let config2 = Config::parse_args(vec![
+            std::ffi::OsString::from("rgrep"),
+            std::ffi::OsString::from("--directories=skip"),
+            std::ffi::OsString::from("pat"),
+        ])
+        .unwrap();
         assert_eq!(config2.directories, DirectoriesAction::Skip);
 
-        let config3 = Config::parse_args(vec![std::ffi::OsString::from("rgrep"), std::ffi::OsString::from("-d"), std::ffi::OsString::from("recurse"), std::ffi::OsString::from("pat")]).unwrap();
+        let config3 = Config::parse_args(vec![
+            std::ffi::OsString::from("rgrep"),
+            std::ffi::OsString::from("-d"),
+            std::ffi::OsString::from("recurse"),
+            std::ffi::OsString::from("pat"),
+        ])
+        .unwrap();
         assert_eq!(config3.directories, DirectoriesAction::Recurse);
     }
 
     #[test]
     fn test_devices_action_parsing() {
-        let config = Config::parse_args(vec![std::ffi::OsString::from("rgrep"), std::ffi::OsString::from("-D"), std::ffi::OsString::from("read"), std::ffi::OsString::from("pat")]).unwrap();
+        let config = Config::parse_args(vec![
+            std::ffi::OsString::from("rgrep"),
+            std::ffi::OsString::from("-D"),
+            std::ffi::OsString::from("read"),
+            std::ffi::OsString::from("pat"),
+        ])
+        .unwrap();
         assert_eq!(config.devices, DevicesAction::Read);
 
-        let config2 = Config::parse_args(vec![std::ffi::OsString::from("rgrep"), std::ffi::OsString::from("--devices=skip"), std::ffi::OsString::from("pat")]).unwrap();
+        let config2 = Config::parse_args(vec![
+            std::ffi::OsString::from("rgrep"),
+            std::ffi::OsString::from("--devices=skip"),
+            std::ffi::OsString::from("pat"),
+        ])
+        .unwrap();
         assert_eq!(config2.devices, DevicesAction::Skip);
     }
 }

@@ -72,17 +72,24 @@ mod tests {
 
     #[test]
     fn test_grep_colors_parser() {
-        unsafe { std::env::set_var("GREP_COLORS", "ms=1;33:fn=34:unknown=99"); }
+        unsafe {
+            std::env::set_var("GREP_COLORS", "ms=1;33:fn=34:unknown=99");
+        }
         let colors = GrepColors::from_env();
         assert_eq!(colors.ms, "1;33");
         assert_eq!(colors.fn_color, "34");
         assert_eq!(colors.ln, "32"); // default
-        unsafe { std::env::remove_var("GREP_COLORS"); }
+        unsafe {
+            std::env::remove_var("GREP_COLORS");
+        }
     }
 
     #[test]
     fn test_ansi_wrap() {
-        assert_eq!(ansi_wrap("foo", "01;31"), "\x1b[01;31m\x1b[Kfoo\x1b[m\x1b[K");
+        assert_eq!(
+            ansi_wrap("foo", "01;31"),
+            "\x1b[01;31m\x1b[Kfoo\x1b[m\x1b[K"
+        );
         assert_eq!(ansi_wrap("bar", ""), "bar");
     }
 }
