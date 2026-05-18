@@ -113,6 +113,7 @@ fn run_command_with_stdin(
 }
 
 #[test]
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)] // single-function manifest harness — decomposition would obscure the failure report
 fn test_differential() {
     let manifest_path = Path::new("tests/testsuite.toml");
     let manifest_content =
@@ -145,8 +146,9 @@ fn test_differential() {
             continue;
         }
 
-        let mut temp_dir_path = None;
-        if !case.fixture_files.is_empty() {
+        let temp_dir_path = if case.fixture_files.is_empty() {
+            None
+        } else {
             let t = std::env::temp_dir().join(format!(
                 "testag-grep-fixtures-{}",
                 case.name.replace(' ', "_")
@@ -165,8 +167,8 @@ fn test_differential() {
                     fs::write(&p, &f.content).unwrap();
                 }
             }
-            temp_dir_path = Some(t);
-        }
+            Some(t)
+        };
 
         let mut processed_args = case.args.clone();
         let mut processed_expected = case.expected_stdout.clone();

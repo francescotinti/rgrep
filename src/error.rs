@@ -3,7 +3,7 @@
 //
 // AI-assisted port:
 //   Architect: Claude Opus 4.7 (1M context, Anthropic)
-//   Implementer: Gemini Antigravity (Google)
+//   Implementer: Claude Opus 4.7 (1M context, Anthropic)  -- Ondata 2 single-shot
 //
 // https://github.com/francescotinti/rgrep
 

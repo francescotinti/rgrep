@@ -35,6 +35,22 @@ impl Default for GrepColors {
 }
 
 impl GrepColors {
+    /// `true` when every color slot is empty — used by [`crate::matcher::Matcher::highlight`]
+    /// to short-circuit the per-line ANSI rebuild and hand back the input slice
+    /// as a borrowed [`std::borrow::Cow`]. Coherent with the `String::new()`
+    /// defaults introduced in D-Ondata-2.8.
+    #[must_use]
+    pub const fn is_disabled(&self) -> bool {
+        self.ms.is_empty()
+            && self.mc.is_empty()
+            && self.fn_color.is_empty()
+            && self.ln.is_empty()
+            && self.bn.is_empty()
+            && self.se.is_empty()
+            && self.sl.is_empty()
+            && self.cx.is_empty()
+    }
+
     /// Build a `GrepColors` table by parsing the `GREP_COLORS` env variable
     /// on top of the GNU grep defaults (red bold matches, magenta filename, …).
     #[must_use]
