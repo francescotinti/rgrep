@@ -13,6 +13,7 @@ use crate::matcher::Matcher;
 use crate::output::{GrepColors, ansi_wrap};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use memmap2::MmapOptions;
+use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::fs::{self, File};
 use std::io::IsTerminal;
@@ -160,6 +161,25 @@ fn search_file(pctx: &PrintCtx, matcher: &Matcher, file: File) -> Result<bool, R
     let use_mmap = pctx.config.binary_opts.mmap && metadata.is_file() && metadata.len() > 0;
     if use_mmap && let Ok(r) = try_mmap_search(&file, pctx, matcher) {
         return Ok(r);
+    }
+    // PERF-FIX-O5-2: for small/medium regular files (<16 MB), slurp the
+    // contents into a single Vec<u8> and parse via Cursor — Cursor's
+    // BufRead::fill_buf returns the full remaining slice, so read_until
+    // performs zero intermediate memcpy per line (vs BufReader::read_until
+    // which copies each line from the 8 KB internal buffer into the
+    // caller's Vec<u8>). PERF_REPORT.md §7 mmap_vs_bufread shows the same
+    // Cursor-shaped I/O pattern saves ~12 % vs streaming BufReader on a
+    // 92 KB file; mmap is unavailable here (either disabled by config or
+    // the kernel mapping failed) so the slurp is the next-best option.
+    // Profile attribution: PROFILE_REPORT.md §5 PERF-FIX-O5-2.
+    const SLURP_LIMIT: u64 = 16 * 1024 * 1024;
+    if metadata.is_file() && metadata.len() > 0 && metadata.len() < SLURP_LIMIT {
+        use std::io::Read;
+        let mut bytes = Vec::with_capacity(metadata.len() as usize + 1);
+        let mut r = BufReader::new(&file);
+        if r.read_to_end(&mut bytes).is_ok() {
+            return bufread_search(pctx, matcher, Cursor::new(bytes));
+        }
     }
     bufread_search(pctx, matcher, BufReader::new(file))
 }
@@ -403,7 +423,14 @@ fn bufread_search<R: BufRead>(
             }
         };
 
-        let line_cow = String::from_utf8_lossy(&buffer);
+        // PERF-FIX-O5-1: validate UTF-8 via the usize-block fast path in
+        // core::str::run_utf8_validation rather than the byte-by-byte
+        // Utf8Chunks scan used by from_utf8_lossy. ASCII input (the common
+        // case for source code) hits the fast path; non-UTF-8 input falls
+        // back to the existing lossy semantics with identical observable
+        // behaviour. Profile attribution: PROFILE_REPORT.md §5 PERF-FIX-O5-1.
+        let line_cow: Cow<'_, str> = std::str::from_utf8(&buffer)
+            .map_or_else(|_| String::from_utf8_lossy(&buffer), Cow::Borrowed);
         let mut line_str = line_cow.as_ref();
         if line_str.ends_with(delimiter as char) {
             line_str = &line_str[..line_str.len() - 1];

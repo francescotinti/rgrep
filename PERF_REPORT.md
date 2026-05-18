@@ -225,3 +225,112 @@ All numbers in this report were taken from a single uninterrupted
 expected to differ by ≤5 % per criterion's documented noise envelope; if
 a re-run shifts a number by >15 %, suspect background CPU contention
 (other apps, Time Machine, Spotlight indexing).
+
+---
+
+# Ondata 5 post-fix
+
+**Date**: 2026-05-18 (same day as Ondata 4 baseline)
+**Pre-fix commit**: `a1243e2` (post-Ondata 4)
+**Fixes applied**: PERF-FIX-O5-1 (UTF-8 fast path) + PERF-FIX-O5-2
+(slurp-and-cursor for small regular files). See
+`rgrep/PROFILE_REPORT.md` §5 for the per-fix hypothesis, expected delta
+and validation reasoning.
+**Platform/toolchain**: identical to the Ondata 4 row above (Darwin 25.4.0
+arm64, rustc 1.90.0, criterion 0.5.1, same machine, same shell, no
+reboot between runs).
+
+## Post-fix table — pre / post / Δ for all 7 scenarios
+
+Per-scenario rgrep median only. BSD `/usr/bin/grep` and ripgrep rows are
+unchanged from Ondata 4 (we did not modify those binaries).
+
+### 1. `literal_match_count` — `-c "include"` on 5 `.c` files
+
+| Median | Lower 95% | Median | Upper 95% | Δ vs Ondata 4 median |
+|---|---|---|---|---|
+| Pre (`a1243e2`)  | 4.284 ms | **4.444 ms** | 4.635 ms | baseline |
+| Post (Ondata 5)  | 3.874 ms | **4.023 ms** | 4.230 ms | **−9.5 %** ✅ |
+
+### 2. `regex_simple` — `-E "^[a-z]+\("` on `grep.c`
+
+| Median | Lower 95% | Median | Upper 95% | Δ vs Ondata 4 median |
+|---|---|---|---|---|
+| Pre (`a1243e2`)  | 3.655 ms | **3.691 ms** | 3.732 ms | baseline |
+| Post (Ondata 5)  | 3.639 ms | **3.720 ms** | 3.824 ms | +0.8 % (within noise) |
+
+### 3. `fixed_string_F` — `-rF "MB_LEN_MAX"` on `gnu-grep/src/`
+
+| Median | Lower 95% | Median | Upper 95% | Δ vs Ondata 4 median |
+|---|---|---|---|---|
+| Pre (`a1243e2`)  | 4.440 ms | **4.468 ms** | 4.497 ms | baseline |
+| Post (Ondata 5)  | 4.470 ms | **4.586 ms** | 4.728 ms | +2.7 % (within noise) |
+
+### 4. `recursive_walk` — `-r "TODO"` on `gnu-grep/src/`
+
+| Median | Lower 95% | Median | Upper 95% | Δ vs Ondata 4 median |
+|---|---|---|---|---|
+| Pre (`a1243e2`)  | 4.444 ms | **4.547 ms** | 4.652 ms | baseline |
+| Post (Ondata 5)  | 4.478 ms | **4.558 ms** | 4.623 ms | +0.2 % (flat) |
+
+### 5. `invert_match` — `-v -c "^$"` on `grep.c`
+
+| Median | Lower 95% | Median | Upper 95% | Δ vs Ondata 4 median |
+|---|---|---|---|---|
+| Pre (`a1243e2`)  | 3.589 ms | **3.626 ms** | 3.670 ms | baseline |
+| Post (Ondata 5)  | 3.553 ms | **3.586 ms** | 3.624 ms | −1.1 % (within noise) |
+
+### 6. `cow_impact` — 4 colour/count modes on `grep.c`
+
+| Mode                              | Pre median | Post median | Δ      | Status   |
+|-----------------------------------|------------|-------------|--------|----------|
+| `--color=never` with line output  | 3.642 ms   | 3.554 ms    | −2.4 % | flat     |
+| `--color=always` with line output | 3.707 ms   | 3.783 ms    | +2.0 % | flat     |
+| `--color=never` `-c` count only   | 4.174 ms   | 3.515 ms    | **−15.8 %** | ✅ ≥5 %  |
+| `--color=always` `-c` count only  | 3.699 ms   | 3.736 ms    | +1.0 % | flat     |
+
+### 7. `mmap_vs_bufread` — `--mmap` vs default bufread on 92 KB file
+
+| Mode                  | Pre median | Post median | Δ       | Status   |
+|-----------------------|------------|-------------|---------|----------|
+| `bufread` (default)   | 4.141 ms   | 3.579 ms    | **−13.6 %** | ✅ ≥5 %  |
+| `--mmap`              | 3.648 ms   | 3.479 ms    | −4.7 %  | sub-5 %  |
+
+## Summary
+
+- **3 scenarios with ≥5 % improvement** (D-Ondata-5.6 satisfied):
+  `literal_match_count` (−9.5 %), `cow_impact/color_never_count_only`
+  (−15.8 %), `mmap_vs_bufread/bufread_default` (−13.6 %).
+- **Largest regression**: +2.7 % on `fixed_string_F`. Well below the
+  5 % regression cap (D-Ondata-5.6 invariant).
+- **3 SPEC-defined worst targets** (`regex_simple`, `invert_match`,
+  `fixed_string_F`) all moved within criterion's noise envelope. The
+  per-line `memchr_aligned` cost dominates these scenarios and cannot
+  be addressed without the `memchr` crate as a runtime dep
+  (D-Ondata-5.10 explicit veto). PROFILE_REPORT.md §5 documents this
+  honest negative result on the 3 SPEC targets and the win-on-other-
+  scenarios outcome.
+- **rgrep vs BSD grep, relative position**: closest to BSD on
+  `literal_match_count` now at +2.4 % (was +5.5 %); `bufread_default`
+  win is **on-par** with the previous `--mmap` win, meaning the slurp
+  pattern brings the default I/O strategy up to mmap territory for
+  small files. `regex_simple` relative position improved
+  (+30.8 % → +28.4 %) but both sides drifted; treat as
+  noise-bounded improvement.
+
+## Reproducibility (post-fix)
+
+```bash
+cd rgrep
+git log -1 --oneline  # should show the perf(ondata5) commit hash
+cargo bench           # full run, ~6 minutes; compare to a1243e2 baseline
+```
+
+Criterion stores per-bench baselines under `target/criterion/`. To
+re-run the comparison against the `a1243e2` baseline (rather than the
+"last run" auto-baseline), tag the pre-fix commit's bench output with
+`cargo bench --save-baseline a1243e2` (would require a separate
+checkout). For verification purposes the numerical pre-medians above
+are taken verbatim from the Ondata 4 row of this same report — no
+re-run on `a1243e2` was performed during this session (the baseline
+report was authoritative).
