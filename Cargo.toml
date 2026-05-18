@@ -21,3 +21,9 @@ perl-regexp = ["dep:pcre2"]
 toml = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 proptest = "1.4"
+criterion = { version = "0.5", features = ["html_reports"] }
+which = "8"
+
+[[bench]]
+name = "search"
+harness = false
