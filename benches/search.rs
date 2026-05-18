@@ -174,6 +174,30 @@ fn bench_mmap_vs_bufread(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_quiet_mode(c: &mut Criterion) {
+    // PERF-FIX-O6: dedicated `-q` (quiet, early-exit on first match)
+    // scenario. Exercises the pure-quiet fast path introduced in Ondata 6,
+    // which skips UTF-8 conversion + line trim + find_match_offsets and
+    // returns Ok(true) on first hit. `include` matches in the very first
+    // lines of grep.c, so the win on rgrep is dominated by spawn cost.
+    let mut group = c.benchmark_group("quiet_mode");
+    let rgrep = env!("CARGO_BIN_EXE_rgrep");
+    let pattern = "include";
+    let file = "../gnu-grep/src/grep.c";
+    group.bench_function("rgrep", |b| {
+        b.iter(|| run(rgrep, &["-q", pattern, file]));
+    });
+    group.bench_function("system_grep", |b| {
+        b.iter(|| run(SYS_GREP, &["-q", pattern, file]));
+    });
+    if has_ripgrep() {
+        group.bench_function("ripgrep", |b| {
+            b.iter(|| run("rg", &["-q", pattern, file]));
+        });
+    }
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_literal_match_count,
@@ -183,5 +207,6 @@ criterion_group!(
     bench_invert_match,
     bench_cow_impact,
     bench_mmap_vs_bufread,
+    bench_quiet_mode,
 );
 criterion_main!(benches);

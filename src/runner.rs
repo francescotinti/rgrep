@@ -410,6 +410,56 @@ fn bufread_search<R: BufRead>(
         }
     }
 
+    // PERF-FIX-O6: pure-count / pure-quiet fast path. When the mode is
+    // exclusively boolean (no color, no `-o`, no `-l`/`-L`, no context, no
+    // `-m` cap, no binary detection) we can skip the UTF-8 conversion,
+    // the line trim, find_match_offsets and the process_line dispatch.
+    // AhoCorasick (`-F`) and pcre2 (`-P`) backends become direct byte
+    // calls. Profile attribution: PROFILE_REPORT.md §2.4 + PERF-FIX-O6.
+    let output = &config.output_opts;
+    let pure_count_quiet = (output.count || output.quiet)
+        && !output.only_matching
+        && !output.files_with_matches
+        && !output.files_without_match
+        && !pctx.color_enabled
+        && before_ctx == 0
+        && after_ctx == 0
+        && config.binary_opts.max_count.is_none()
+        && !is_binary;
+
+    if pure_count_quiet {
+        loop {
+            buffer.clear();
+            match reader.read_until(delimiter, &mut buffer) {
+                Ok(0) => break,
+                Ok(_) => {}
+                Err(e) => {
+                    if !config.filter_opts.no_messages {
+                        eprintln!("rgrep: {}: {e}", pctx.filename);
+                    }
+                    break;
+                }
+            }
+            let mut line_bytes: &[u8] = &buffer;
+            if line_bytes.last() == Some(&delimiter) {
+                line_bytes = &line_bytes[..line_bytes.len() - 1];
+            }
+            if !config.binary_opts.binary && delimiter == b'\n' && line_bytes.last() == Some(&b'\r')
+            {
+                line_bytes = &line_bytes[..line_bytes.len() - 1];
+            }
+            if matcher.is_match_bytes(line_bytes) {
+                state.match_count += 1;
+                has_match = true;
+                if output.quiet {
+                    return Ok(true);
+                }
+            }
+        }
+        emit_trailing_summary(pctx, &state, has_match);
+        return Ok(has_match);
+    }
+
     loop {
         buffer.clear();
         let bytes_read = match reader.read_until(delimiter, &mut buffer) {

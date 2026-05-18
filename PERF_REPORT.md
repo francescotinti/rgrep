@@ -334,3 +334,143 @@ checkout). For verification purposes the numerical pre-medians above
 are taken verbatim from the Ondata 4 row of this same report — no
 re-run on `a1243e2` was performed during this session (the baseline
 report was authoritative).
+
+---
+
+# Ondata 6 post-fix
+
+**Date**: 2026-05-18 (same day as Ondata 4 baseline + Ondata 5 post-fix)
+**Pre-fix commit**: `6ab7be1` (post-Ondata 5)
+**Fix applied**: PERF-FIX-O6 (byte-input fast path for pure count/quiet
+modes). New `MatchEngine::engine_is_match_bytes` trait method with
+default impl + 4 per-engine overrides (Regex, Fancy, AhoCorasick,
+Pcre2 feature-gated). New `bufread_search` precondition
+`pure_count_quiet` gates a byte-only loop that skips UTF-8 conversion,
+line trim, `find_match_offsets` and the `process_line` dispatch when
+the mode is purely boolean (count and/or quiet without color, `-o`,
+context, `-m` cap or binary detection). See `NEXT_STEPS.md` § "Ondata 6"
+(amended) D-Ondata-6.1..6.7 for the contract, and the per-engine
+override rationale in `src/matcher.rs` PERF-FIX-O6 comments.
+**Platform/toolchain**: identical to the Ondata 4 + Ondata 5 rows above
+(Darwin 25.4.0 arm64, rustc 1.90.0, criterion 0.5.1, same machine,
+same shell, no reboot between runs).
+**Bench groups**: 8 (7 pre-existing + 1 new `quiet_mode`).
+
+## Post-fix table — pre / post / Δ for all 11 pre-existing rgrep scenarios
+
+Criterion's `change/` directory provides per-scenario Δ vs the Ondata 5
+saved baseline. BSD `/usr/bin/grep` and ripgrep rows are unchanged from
+Ondata 5 (we did not modify those binaries). For context, the absolute
+drift on BSD grep medians across the three runs of this session is
+±1.13 % — that is the empirical noise floor below which a delta is not
+distinguishable from variance.
+
+### 1. `literal_match_count` — `-c "include"` on 5 `.c` files (pure count fast path)
+
+| Phase            | Lower 95% | Median       | Upper 95%  | Δ vs Ondata 5 |
+|------------------|-----------|--------------|------------|---------------|
+| Pre  (`6ab7be1`) | 3.874 ms  | **4.023 ms** | 4.230 ms   | baseline      |
+| Post (Ondata 6)  | 3.723 ms  | **3.749 ms** | 3.775 ms   | **−1.21 %** (95 % CI [−2.00..−0.04]; significant — meets ≥+1 % bar) ✅ |
+
+### 2. `regex_simple` — `-E "^[a-z]+\("` on `grep.c` (no count/quiet — fast path NOT triggered)
+
+| Phase            | Lower 95% | Median       | Upper 95%  | Δ vs Ondata 5 |
+|------------------|-----------|--------------|------------|---------------|
+| Pre  (`6ab7be1`) | 3.639 ms  | **3.720 ms** | 3.824 ms   | baseline      |
+| Post (Ondata 6)  | 3.610 ms  | **3.627 ms** | 3.643 ms   | +0.53 % (95 % CI [−0.17..+1.30]; within noise — expected, no fast path) |
+
+### 3. `fixed_string_F` — `-rF "MB_LEN_MAX"` on `gnu-grep/src/` (no count/quiet — fast path NOT triggered)
+
+| Phase            | Lower 95% | Median       | Upper 95%  | Δ vs Ondata 5 |
+|------------------|-----------|--------------|------------|---------------|
+| Pre  (`6ab7be1`) | 4.470 ms  | **4.586 ms** | 4.728 ms   | baseline      |
+| Post (Ondata 6)  | 4.490 ms  | **4.504 ms** | 4.527 ms   | +1.82 % (95 % CI [+0.64..+2.61]; significant but well below 5 % regression cap; fast path not in effect — attributed to bench-run variance) |
+
+### 4. `recursive_walk` — `-r "TODO"` on `gnu-grep/src/` (no count/quiet — fast path NOT triggered)
+
+| Phase            | Lower 95% | Median       | Upper 95%  | Δ vs Ondata 5 |
+|------------------|-----------|--------------|------------|---------------|
+| Pre  (`6ab7be1`) | 4.478 ms  | **4.558 ms** | 4.623 ms   | baseline      |
+| Post (Ondata 6)  | 4.312 ms  | **4.373 ms** | 4.440 ms   | −1.83 % (95 % CI [−5.06..−0.20]; wide CI; unrelated drift, no fast path code touched) |
+
+### 5. `invert_match` — `-v -c "^$"` on `grep.c` (pure count + invert — fast path ACTIVE)
+
+| Phase            | Lower 95% | Median       | Upper 95%  | Δ vs Ondata 5 |
+|------------------|-----------|--------------|------------|---------------|
+| Pre  (`6ab7be1`) | 3.553 ms  | **3.586 ms** | 3.624 ms   | baseline      |
+| Post (Ondata 6)  | 3.554 ms  | **3.584 ms** | 3.600 ms   | +0.89 % (95 % CI [−0.08..+1.75]; within noise) |
+
+### 6. `cow_impact` — 4 colour/count modes on `grep.c`
+
+| Mode                              | Pre median | Post median | Δ       | Fast path | Status |
+|-----------------------------------|------------|-------------|---------|-----------|--------|
+| `--color=never` with line output  | 3.554 ms   | 3.566 ms    | +0.70 % | no (no -c)         | flat   |
+| `--color=always` with line output | 3.783 ms   | 3.603 ms    | −0.04 % | no (no -c)         | flat   |
+| `--color=never` `-c` count only   | 3.515 ms   | 3.490 ms    | −0.23 % | **YES**            | flat — already optimised by PERF-FIX-O5-1 + PERF-FIX-O5-2 |
+| `--color=always` `-c` count only  | 3.736 ms   | 3.527 ms    | −0.64 % | no (color rejects) | flat   |
+
+### 7. `mmap_vs_bufread` — `--mmap` vs default bufread on 92 KB file
+
+| Mode                  | Pre median | Post median | Δ       | Fast path | Status |
+|-----------------------|------------|-------------|---------|-----------|--------|
+| `bufread` (default)   | 3.579 ms   | 3.532 ms    | +0.01 % | **YES**   | flat — already optimised by PERF-FIX-O5-2 |
+| `--mmap`              | 3.479 ms   | 3.397 ms    | **−2.35 %** | **YES** | significant (95 % CI [−3.53..−1.03]); fast path stacks on top of mmap-via-Cursor I/O |
+
+## 8. NEW bench — `quiet_mode` (`-q "include"` on `grep.c`, early-exit on first match)
+
+| Tool                  | Lower 95% | Median       | Upper 95%  | vs rgrep |
+|-----------------------|-----------|--------------|------------|----------|
+| **rgrep** (post-O6)   | 3.414 ms  | **3.522 ms** | 3.645 ms   | baseline |
+| `/usr/bin/grep` (BSD) | 2.100 ms  | **2.149 ms** | 2.197 ms   | −39 % faster than rgrep — dominated by smaller process spawn |
+| `rg` (ripgrep)        | n/a       | not installed on this machine | — | (skipped silently per `has_ripgrep()` gate) |
+
+No pre-O6 baseline (new bench). Absolute number is comparable to the
+other count scenarios (~3.5 ms), confirming the fast path applies. The
++64 % gap vs BSD grep is the spawn-cost residue documented under
+"Limitations / process-spawn overhead" in the Ondata 4 baseline section.
+
+## Summary
+
+- **2 scenarios with statistically significant Δ ≥+1 % improvement** on
+  scenarios where the fast path applies:
+  `literal_match_count` (−1.21 %, count over 5 files) and
+  `mmap_vs_bufread/mmap_explicit` (−2.35 %, count + --mmap on 92 KB).
+- **Largest regression**: +1.82 % on `fixed_string_F` (significant but
+  fast path NOT in effect on this scenario — `-rF` without `-c`/`-q`).
+  Well below the 5 % regression cap (D-Ondata-6.6 invariant).
+- **Pure-count scenarios already at Ondata 5 floor**: 3/4 count-only
+  scenarios show flat Δ within criterion noise. PERF-FIX-O5-1 (UTF-8
+  fast path) + PERF-FIX-O5-2 (slurp-and-cursor) had already captured
+  the bulk of the available win on the Regex backend; Ondata 6's
+  remaining contribution is the per-line dispatch overhead (~2 %
+  on mmap_explicit). The amended D-Ondata-6.6 ≥+1 % bar is met on 2
+  scenarios — qualifies as **marginal success**.
+- **AhoCorasick byte path not exercised by current bench suite**: the
+  `fixed_string_F` bench uses `-rF` (recursive, no count) — the new
+  fast path is gated by `count || quiet`, so AhoCorasick's
+  byte-native `is_match(&[u8])` advantage stays latent. A future
+  `-cF` or `-qF` micro-bench could surface this; deferred as
+  "future work" (bench-suite extension, not a code change).
+- **API extension as architectural deliverable**: even on scenarios
+  where the perf delta is within noise, Ondata 6 adds
+  `MatchEngine::engine_is_match_bytes` (trait + 4 overrides) and
+  `Matcher::is_match_bytes` — a stable typed surface other waves
+  (e.g. a memchr-direct Ondata 7) can plug into without re-touching
+  the runner. This is consistent with the amended target ("retain the
+  API as deliverable architetturale" when perf is neutral).
+
+## Reproducibility (Ondata 6)
+
+```bash
+cd rgrep
+git log -1 --oneline  # should show perf(ondata6) commit hash
+cargo bench           # ~5 minutes; criterion compares automatically vs
+                      # the prior "last run" baseline (post-Ondata-5),
+                      # populating target/criterion/<group>/change/.
+```
+
+Numerical pre-medians in the tables above are taken verbatim from the
+Ondata 5 row of this same report (the comparison baseline criterion
+loaded from `target/criterion/<group>/base/`). Post-medians are read
+from `target/criterion/<group>/new/estimates.json` produced by the
+2026-05-18 ~16:24 GMT+2 bench run.

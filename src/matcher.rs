@@ -23,6 +23,15 @@ pub trait MatchEngine {
     fn engine_is_match(&self, line: &str) -> bool;
     fn engine_highlight<'a>(&self, line: &'a str, ms_code: &str) -> Cow<'a, str>;
     fn engine_find_offsets(&self, line: &str) -> Vec<(usize, String)>;
+    /// PERF-FIX-O6: byte-input fast path used by `bufread_search` when the
+    /// mode is purely boolean (count and/or quiet without color, `-o`,
+    /// context, max_count or binary detection). Default impl falls back to
+    /// `String::from_utf8_lossy` + [`engine_is_match`]; byte-native backends
+    /// (`AhoCorasick`, `pcre2::bytes::Regex`) override to skip the
+    /// conversion altogether — that is where the real saving lives.
+    fn engine_is_match_bytes(&self, buf: &[u8]) -> bool {
+        self.engine_is_match(&String::from_utf8_lossy(buf))
+    }
 }
 
 pub enum Engine {
@@ -62,6 +71,15 @@ impl MatchEngine for Regex {
             .map(|m| (m.start(), m.as_str().to_string()))
             .collect()
     }
+
+    fn engine_is_match_bytes(&self, buf: &[u8]) -> bool {
+        // PERF-FIX-O6 + PERF-FIX-O5-1 mirror: fast UTF-8 path; fallback to
+        // lossy conversion only when the buffer is not valid UTF-8.
+        std::str::from_utf8(buf).map_or_else(
+            |_| self.is_match(&String::from_utf8_lossy(buf)),
+            |s| self.is_match(s),
+        )
+    }
 }
 
 impl MatchEngine for fancy_regex::Regex {
@@ -83,6 +101,18 @@ impl MatchEngine for fancy_regex::Regex {
             .map(|m| (m.start(), m.as_str().to_string()))
             .collect()
     }
+
+    fn engine_is_match_bytes(&self, buf: &[u8]) -> bool {
+        // PERF-FIX-O6: fancy_regex is str-only, but the UTF-8 fast path
+        // avoids the lossy allocation on ASCII input.
+        std::str::from_utf8(buf).map_or_else(
+            |_| {
+                self.is_match(&String::from_utf8_lossy(buf))
+                    .unwrap_or(false)
+            },
+            |s| self.is_match(s).unwrap_or(false),
+        )
+    }
 }
 
 impl MatchEngine for AhoCorasick {
@@ -102,6 +132,12 @@ impl MatchEngine for AhoCorasick {
         self.find_iter(line)
             .map(|m| (m.start(), line[m.start()..m.end()].to_string()))
             .collect()
+    }
+
+    fn engine_is_match_bytes(&self, buf: &[u8]) -> bool {
+        // PERF-FIX-O6: AhoCorasick is byte-native — direct call, no UTF-8
+        // conversion. This is the primary win driver of the wave.
+        self.is_match(buf)
     }
 }
 
@@ -126,6 +162,11 @@ impl MatchEngine for pcre2::bytes::Regex {
             .flatten()
             .map(|m| (m.start(), line[m.start()..m.end()].to_string()))
             .collect()
+    }
+
+    fn engine_is_match_bytes(&self, buf: &[u8]) -> bool {
+        // PERF-FIX-O6: pcre2 is byte-native — direct call, no UTF-8 conv.
+        self.is_match(buf).unwrap_or(false)
     }
 }
 
@@ -313,6 +354,19 @@ impl<'a> Matcher<'a> {
     #[must_use]
     pub fn is_match(&self, line: &str) -> bool {
         let matches = self.engine.as_match_engine().engine_is_match(line);
+        if self.config.filter_opts.invert_match {
+            !matches
+        } else {
+            matches
+        }
+    }
+
+    /// PERF-FIX-O6: byte-input twin of [`is_match`] used by the
+    /// `bufread_search` pure-count/quiet fast path. Mirrors the same
+    /// `invert_match` post-processing so callers can drop it inline.
+    #[must_use]
+    pub fn is_match_bytes(&self, buf: &[u8]) -> bool {
+        let matches = self.engine.as_match_engine().engine_is_match_bytes(buf);
         if self.config.filter_opts.invert_match {
             !matches
         } else {
