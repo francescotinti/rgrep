@@ -1,10 +1,12 @@
 # GNU/BSD verification — 2026-09-30
 
 Executed locally on macOS arm64, rustc 1.98.1, GNU grep 3.12 (Homebrew)
-and BSD grep 2.6.0-FreeBSD. **Linux has not been executed.** The committed
-workflow has been checked for YAML and shell syntax, with four matrix entries
-(Linux/macOS × default/PCRE2); it will run after publication to GitHub.
-No push was performed as part of this verification.
+and BSD grep 2.6.0-FreeBSD. After publication, the [first CI run](https://github.com/francescotinti/rgrep/actions/runs/36766671569)
+**passed both Linux configurations and macOS with PCRE2**. The default macOS
+job failed before the build because Bash 3 rejects an empty array under
+`set -u`; the workflow now uses positional arguments. The report below
+records the earlier local verification; see `reports/ci-first-run-20260930.json`
+and [publication notes](docs/experiment/PUBLICATION.md) for remote status.
 
 ## Measured coverage
 
@@ -64,7 +66,7 @@ RGREP_ORACLE=/usr/bin/grep cargo test --locked --features perl-regexp -- --nocap
 RGREP_ORACLE=/opt/homebrew/bin/ggrep RGREP_STRICT_GNU=1 cargo test --test diff_runner -- --nocapture
 ```
 
-On Linux, select `/usr/bin/grep` for the GNU runs. Run CI before claiming
-Linux validation; no Linux container runtime was available in this workspace.
+On Linux, select `/usr/bin/grep` for the GNU runs. The first remote CI run
+validated both Linux configurations; no Linux runtime was used locally.
 Next compatibility work should resolve binary diagnostic routing and `-T`
 formatting in dedicated, tested steps rather than expanding the exceptions.

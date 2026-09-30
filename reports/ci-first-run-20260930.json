@@ -1,0 +1,29 @@
+{
+  "databaseId": 36766671569,
+  "headSha": "3e9d38f95878a4e289d79a0d2c8507b0177dff28",
+  "url": "https://github.com/francescotinti/rgrep/actions/runs/36766671569",
+  "conclusion": "failure",
+  "jobs": [
+    {
+      "name": "verify (ubuntu-latest, default)",
+      "conclusion": "success",
+      "url": "https://github.com/francescotinti/rgrep/actions/runs/36766671569/job/110062460249"
+    },
+    {
+      "name": "verify (ubuntu-latest, perl-regexp)",
+      "conclusion": "success",
+      "url": "https://github.com/francescotinti/rgrep/actions/runs/36766671569/job/110062460612"
+    },
+    {
+      "name": "verify (macos-latest, default)",
+      "conclusion": "failure",
+      "url": "https://github.com/francescotinti/rgrep/actions/runs/36766671569/job/110062460701"
+    },
+    {
+      "name": "verify (macos-latest, perl-regexp)",
+      "conclusion": "success",
+      "url": "https://github.com/francescotinti/rgrep/actions/runs/36766671569/job/110062460781"
+    }
+  ],
+  "failure_reason": "macOS default: Bash 3 empty feature_args array under set -u; replaced with positional parameters."
+}
