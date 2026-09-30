@@ -1,5 +1,6 @@
 name = "--mmap base"
 args = ["--mmap", "foo", "{FIXTURES}/file.txt"]
+oracle_args = ["foo", "{FIXTURES}/file.txt"]
 stdin = ""
 expected_stdout = "foo\nfoo\n"
 expected_exit_code = 0

@@ -1,0 +1,52 @@
+{
+  "date": "2026-09-30",
+  "platform": "macOS arm64",
+  "rustc": "1.98.1",
+  "gnu_version": "3.12",
+  "bsd_version": "2.6.0-FreeBSD",
+  "linux_execution": false,
+  "ci_yaml_and_shell_syntax_validated": true,
+  "strict_gnu_expected_failures": 4,
+  "configurations": {
+    "gnu-default": {
+      "total": 129,
+      "parity": 121,
+      "rgrep_only": 1,
+      "skipped": 3,
+      "known_gnu_divergences": 4,
+      "failed": 0,
+      "rust_tests_passed": 42,
+      "generated_comparisons": 3072
+    },
+    "gnu-pcre": {
+      "total": 129,
+      "parity": 124,
+      "rgrep_only": 0,
+      "skipped": 1,
+      "known_gnu_divergences": 4,
+      "failed": 0,
+      "rust_tests_passed": 44,
+      "generated_comparisons": 3072
+    },
+    "bsd-default": {
+      "total": 129,
+      "parity": 112,
+      "rgrep_only": 1,
+      "skipped": 16,
+      "known_gnu_divergences": 0,
+      "failed": 0,
+      "rust_tests_passed": 42,
+      "generated_comparisons": 0
+    },
+    "bsd-pcre": {
+      "total": 129,
+      "parity": 112,
+      "rgrep_only": 0,
+      "skipped": 17,
+      "known_gnu_divergences": 0,
+      "failed": 0,
+      "rust_tests_passed": 44,
+      "generated_comparisons": 0
+    }
+  }
+}

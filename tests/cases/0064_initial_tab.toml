@@ -1,5 +1,7 @@
 name = "-T tab alignment"
 args = ["-T", "foo"]
+gnu_difference = "GNU emits no initial tab without a prefix; rgrep currently prepends one."
+gnu_stdout = "foo\n"
 stdin = "foo\n"
 expected_stdout = "\tfoo\n"
 expected_exit_code = 0

@@ -1,17 +1,13 @@
-// rgrep — GNU grep ported to Rust (differential test harness)
+// rgrep — manifest-driven differential verification against GNU/BSD grep.
 // Copyright (c) 2026 Francesco Tinti <francesco.tinti@activemind.it>
-//
-// AI-assisted port:
-//   Architect: Claude Opus 4.7 (1M context, Anthropic)
-//   Implementer: Gemini Antigravity (Google)
-//
-// https://github.com/francescotinti/rgrep
+
+mod common;
 
 use serde::Deserialize;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::{Command, Output, Stdio};
 
 #[derive(Deserialize)]
 struct Testsuite {
@@ -19,15 +15,16 @@ struct Testsuite {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct FixtureFile {
     name: String,
     #[serde(default)]
     content: String,
-    #[serde(default)]
     symlink_to: Option<String>,
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct TestCase {
     name: String,
     args: Vec<String>,
@@ -39,249 +36,221 @@ struct TestCase {
     #[serde(default)]
     skip_reason: String,
     requires_feature: Option<String>,
+    forbids_feature: Option<String>,
     #[serde(default)]
-    expected_to_fail: bool,
+    rgrep_only: bool,
+    oracle_args: Option<Vec<String>>,
+    gnu_difference: Option<String>,
+    gnu_stdout: Option<String>,
+    gnu_stderr_contains: Option<String>,
     #[serde(default)]
     fixture_files: Vec<FixtureFile>,
     env: Option<std::collections::HashMap<String, String>>,
     #[serde(default)]
     sort_output: bool,
+    #[serde(rename = "source")]
+    _source: Option<String>,
 }
 
 #[derive(Debug, PartialEq)]
 enum DiffOutcome {
     Match,
-    Differ { rgrep: String, oracle: String },
+    Differ { rgrep: Vec<u8>, oracle: Vec<u8> },
     BothFail { rgrep_code: i32, oracle_code: i32 },
     OnlyRgrepOk { oracle_code: i32 },
     OnlyOracleOk { rgrep_code: i32 },
 }
 
-fn is_bsd_grep() -> bool {
-    let output = Command::new("grep")
-        .arg("--version")
-        .output()
-        .expect("Failed to execute grep --version");
-
-    let version_str = String::from_utf8_lossy(&output.stdout);
-    let version_err = String::from_utf8_lossy(&output.stderr);
-
-    version_str.contains("BSD grep")
-        || (!version_str.contains("GNU") && !version_err.contains("GNU"))
+fn normalize(bytes: &[u8], sort: bool) -> Vec<u8> {
+    if !sort {
+        return bytes.to_vec();
+    }
+    let mut lines: Vec<_> = bytes.split_inclusive(|&byte| byte == b'\n').collect();
+    lines.sort_unstable();
+    lines.concat()
 }
 
-#[cfg(feature = "perl-regexp")]
-const PCRE_AVAILABLE: bool = true;
-#[cfg(not(feature = "perl-regexp"))]
-const PCRE_AVAILABLE: bool = false;
-
-fn run_command_with_stdin(
-    cmd: &str,
-    args: &[String],
-    stdin_data: &str,
-    env: Option<&std::collections::HashMap<String, String>>,
-) -> (i32, String, String) {
-    let mut command = Command::new(cmd);
-    for arg in args {
-        command.arg(arg);
-    }
-    if let Some(e) = env {
-        for (k, v) in e {
-            command.env(k, v);
+fn outcome(rgrep: &Output, oracle: &Output, sort: bool) -> DiffOutcome {
+    let rgrep_code = rgrep.status.code().unwrap_or(-1);
+    let oracle_code = oracle.status.code().unwrap_or(-1);
+    if rgrep_code == oracle_code {
+        let rgrep = normalize(&rgrep.stdout, sort);
+        let oracle = normalize(&oracle.stdout, sort);
+        if rgrep == oracle {
+            DiffOutcome::Match
+        } else {
+            DiffOutcome::Differ { rgrep, oracle }
+        }
+    } else if rgrep_code == 0 {
+        DiffOutcome::OnlyRgrepOk { oracle_code }
+    } else if oracle_code == 0 {
+        DiffOutcome::OnlyOracleOk { rgrep_code }
+    } else {
+        DiffOutcome::BothFail {
+            rgrep_code,
+            oracle_code,
         }
     }
-    command.stdin(Stdio::piped());
-    command.stdout(Stdio::piped());
-    command.stderr(Stdio::piped());
-
-    let mut child = command
-        .spawn()
-        .unwrap_or_else(|_| panic!("Failed to spawn {cmd}"));
-
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin
-            .write_all(stdin_data.as_bytes())
-            .expect("Failed to write to stdin");
-    }
-
-    let output = child.wait_with_output().expect("Failed to wait on child");
-    let code = output.status.code().unwrap_or(1);
-    let stdout_str = String::from_utf8_lossy(&output.stdout).into_owned();
-    let stderr_str = String::from_utf8_lossy(&output.stderr).into_owned();
-
-    (code, stdout_str, stderr_str)
 }
 
 #[test]
-#[allow(clippy::too_many_lines, clippy::cognitive_complexity)] // single-function manifest harness — decomposition would obscure the failure report
+fn nonzero_exit_still_requires_byte_exact_stdout() {
+    use std::os::unix::process::ExitStatusExt;
+    let make = |stdout| Output {
+        status: std::process::ExitStatus::from_raw(1 << 8),
+        stdout,
+        stderr: Vec::new(),
+    };
+    let actual = make(vec![0xff, 0]);
+    let reference = make(vec![0xfe, 0]);
+    assert!(matches!(
+        outcome(&actual, &reference, false),
+        DiffOutcome::Differ { .. }
+    ));
+    assert_eq!(outcome(&actual, &actual, false), DiffOutcome::Match);
+}
+
+fn run(cmd: &str, args: &[String], case: &TestCase) -> Output {
+    let mut command = Command::new(cmd);
+    command.args(args).env("LC_ALL", "C");
+    if let Some(env) = &case.env {
+        command.envs(env);
+    }
+    let mut child = command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap_or_else(|error| panic!("cannot spawn {cmd}: {error}"));
+    let input = case.stdin.clone();
+    let mut stdin = child.stdin.take().unwrap();
+    let writer = std::thread::spawn(move || {
+        if let Err(error) = stdin.write_all(input.as_bytes()) {
+            assert_eq!(error.kind(), std::io::ErrorKind::BrokenPipe);
+        }
+    });
+    let result = child.wait_with_output().unwrap();
+    writer.join().unwrap();
+    result
+}
+
+#[test]
 fn test_differential() {
-    let manifest_path = Path::new("tests/testsuite.toml");
-    let manifest_content =
-        fs::read_to_string(manifest_path).expect("Failed to read testsuite.toml");
-    let testsuite: Testsuite =
-        toml::from_str(&manifest_content).expect("Failed to parse testsuite.toml");
-
-    let is_bsd = is_bsd_grep();
-
-    let rgrep_bin = env!("CARGO_BIN_EXE_rgrep");
-
+    let suite: Testsuite =
+        toml::from_str(&fs::read_to_string("tests/testsuite.toml").unwrap()).unwrap();
+    let oracle = common::oracle();
     let mut failures = Vec::new();
-
-    for case_path in testsuite.cases {
-        let case_content = fs::read_to_string(Path::new("tests").join(&case_path))
-            .unwrap_or_else(|_| panic!("Failed to read {case_path}"));
+    let (mut passed, mut local, mut skipped, mut known) = (0, 0, 0, 0);
+    let total = suite.cases.len();
+    for case_path in suite.cases {
         let case: TestCase =
-            toml::from_str(&case_content).unwrap_or_else(|_| panic!("Failed to parse {case_path}"));
-
-        if case.skip_if_bsd && is_bsd {
-            eprintln!("[skip] {} (bsd grep) - {}", case.name, case.skip_reason);
-            continue;
-        }
-
-        if let Some(feat) = &case.requires_feature
-            && feat == "perl-regexp"
-            && !PCRE_AVAILABLE
+            toml::from_str(&fs::read_to_string(Path::new("tests").join(&case_path)).unwrap())
+                .unwrap_or_else(|error| panic!("invalid manifest case {case_path}: {error}"));
+        let skip = if case.skip_if_bsd && oracle.is_bsd && !case.rgrep_only {
+            Some(case.skip_reason.as_str())
+        } else if case.requires_feature.as_deref() == Some("perl-regexp")
+            && !cfg!(feature = "perl-regexp")
         {
-            eprintln!("[skip] {} (requires --features perl-regexp)", case.name);
-            continue;
-        }
-
-        let temp_dir_path = if case.fixture_files.is_empty() {
+            Some("requires perl-regexp feature")
+        } else if case.forbids_feature.as_deref() == Some("perl-regexp")
+            && cfg!(feature = "perl-regexp")
+        {
+            Some("tests a build without perl-regexp")
+        } else {
             None
-        } else {
-            let t = std::env::temp_dir().join(format!(
-                "testag-grep-fixtures-{}",
-                case.name.replace(' ', "_")
-            ));
-            let _ = fs::remove_dir_all(&t);
-            fs::create_dir_all(&t).unwrap();
-            for f in &case.fixture_files {
-                let p = t.join(&f.name);
-                if let Some(parent) = p.parent() {
-                    fs::create_dir_all(parent).unwrap();
-                }
-                if let Some(target) = &f.symlink_to {
-                    #[cfg(unix)]
-                    std::os::unix::fs::symlink(target, &p).unwrap();
-                } else {
-                    fs::write(&p, &f.content).unwrap();
-                }
-            }
-            Some(t)
         };
-
-        let mut processed_args = case.args.clone();
-        let mut processed_expected = case.expected_stdout.clone();
-        if let Some(t) = &temp_dir_path {
-            let t_str = t.to_string_lossy();
-            for arg in &mut processed_args {
-                *arg = arg.replace("{FIXTURES}", &t_str);
-            }
-            processed_expected = processed_expected.replace("{FIXTURES}", &t_str);
-        }
-
-        let (oracle_code, oracle_stdout, _oracle_stderr) =
-            run_command_with_stdin("grep", &processed_args, &case.stdin, case.env.as_ref());
-
-        let (rgrep_code, rgrep_stdout, rgrep_stderr) =
-            run_command_with_stdin(rgrep_bin, &processed_args, &case.stdin, case.env.as_ref());
-
-        if let Some(t) = temp_dir_path {
-            let _ = fs::remove_dir_all(t);
-        }
-
-        let outcome = if rgrep_code == 0 && oracle_code == 0 {
-            let mut r_stdout = rgrep_stdout.clone();
-            let mut o_stdout = oracle_stdout.clone();
-            if case.sort_output {
-                let mut r_lines: Vec<&str> = r_stdout.lines().collect();
-                r_lines.sort_unstable();
-                r_stdout = r_lines.join("\n");
-                if !r_stdout.is_empty() {
-                    r_stdout.push('\n');
-                }
-
-                let mut o_lines: Vec<&str> = o_stdout.lines().collect();
-                o_lines.sort_unstable();
-                o_stdout = o_lines.join("\n");
-                if !o_stdout.is_empty() {
-                    o_stdout.push('\n');
-                }
-            }
-            if r_stdout == o_stdout {
-                DiffOutcome::Match
-            } else {
-                DiffOutcome::Differ {
-                    rgrep: r_stdout,
-                    oracle: o_stdout,
-                }
-            }
-        } else if rgrep_code != 0 && oracle_code != 0 {
-            if rgrep_code == oracle_code {
-                DiffOutcome::Match
-            } else {
-                DiffOutcome::BothFail {
-                    rgrep_code,
-                    oracle_code,
-                }
-            }
-        } else if rgrep_code == 0 && oracle_code != 0 {
-            DiffOutcome::OnlyRgrepOk { oracle_code }
-        } else {
-            DiffOutcome::OnlyOracleOk { rgrep_code }
-        };
-
-        if case.expected_to_fail {
-            continue; // Se è marcato come expected_to_fail, saltiamo l'assert
-        }
-
-        if outcome != DiffOutcome::Match {
-            failures.push(format!(
-                "Test '{}' ({}) failed! Outcome: {:?}\nArgs: {:?}\nExpected Code: {}\nOracle Code: {}\nRgrep Code: {}\nOracle Stdout:\n{}\nRgrep Stdout:\n{}\nRgrep Stderr:\n{}",
-                case.name, case_path, outcome, processed_args, case.expected_exit_code, oracle_code, rgrep_code, oracle_stdout, rgrep_stdout, rgrep_stderr
-            ));
+        if let Some(reason) = skip {
+            eprintln!("[skip] {}: {reason}", case.name);
+            skipped += 1;
             continue;
         }
 
-        if oracle_code != case.expected_exit_code {
+        let fixture_dir = std::env::temp_dir().join(format!(
+            "rgrep-diff-{}-{}",
+            std::process::id(),
+            Path::new(&case_path).file_stem().unwrap().to_string_lossy()
+        ));
+        for file in &case.fixture_files {
+            let path = fixture_dir.join(&file.name);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            if let Some(target) = &file.symlink_to {
+                std::os::unix::fs::symlink(target, &path).unwrap();
+            } else {
+                fs::write(&path, &file.content).unwrap();
+            }
+        }
+        let expand = |value: &str| value.replace("{FIXTURES}", &fixture_dir.to_string_lossy());
+        let args: Vec<_> = case.args.iter().map(|s| expand(s)).collect();
+        let oracle_args: Vec<_> = case
+            .oracle_args
+            .as_ref()
+            .unwrap_or(&case.args)
+            .iter()
+            .map(|s| expand(s))
+            .collect();
+        let actual = run(env!("CARGO_BIN_EXE_rgrep"), &args, &case);
+        let reference = (!case.rgrep_only).then(|| run(&oracle.executable, &oracle_args, &case));
+        if !case.fixture_files.is_empty() {
+            fs::remove_dir_all(&fixture_dir).unwrap();
+        }
+        let expected = expand(&case.expected_stdout);
+        if actual.status.code() != Some(case.expected_exit_code)
+            || normalize(&actual.stdout, case.sort_output)
+                != normalize(expected.as_bytes(), case.sort_output)
+        {
             failures.push(format!(
-                "Test '{}' ({}) Oracle grep produced unexpected exit code. Expected {}, got {}",
-                case.name, case_path, case.expected_exit_code, oracle_code
+                "{} ({case_path}): rgrep differs from fixture: {actual:?}",
+                case.name
             ));
             continue;
         }
-
-        let mut final_oracle = oracle_stdout.clone();
-        let mut final_expected = processed_expected.clone();
-        if case.sort_output {
-            let mut o_lines: Vec<&str> = final_oracle.lines().collect();
-            o_lines.sort_unstable();
-            final_oracle = o_lines.join("\n");
-            if !final_oracle.is_empty() {
-                final_oracle.push('\n');
+        let Some(reference) = reference else {
+            local += 1;
+            eprintln!("[rgrep-only] {}", case.name);
+            continue;
+        };
+        if !oracle.is_bsd
+            && let Some(reason) = &case.gnu_difference
+        {
+            let expected_gnu = expand(case.gnu_stdout.as_ref().expect("GNU output required"));
+            let stderr_ok = case.gnu_stderr_contains.as_ref().is_none_or(|needle| {
+                let needle = expand(needle);
+                reference
+                    .stderr
+                    .windows(needle.len())
+                    .any(|part| part == needle.as_bytes())
+            });
+            if reference.status.code() != Some(case.expected_exit_code)
+                || reference.stdout != expected_gnu.as_bytes()
+                || !stderr_ok
+                || outcome(&actual, &reference, case.sort_output) == DiffOutcome::Match
+                || std::env::var_os("RGREP_STRICT_GNU").is_some()
+            {
+                failures.push(format!(
+                    "{}: GNU divergence changed, resolved, or rejected in strict mode: {reason}; {reference:?}",
+                    case.name
+                ));
+            } else {
+                known += 1;
+                eprintln!("[known-gnu-divergence] {}: {reason}", case.name);
             }
-
-            let mut e_lines: Vec<&str> = final_expected.lines().collect();
-            e_lines.sort_unstable();
-            final_expected = e_lines.join("\n");
-            if !final_expected.is_empty() {
-                final_expected.push('\n');
-            }
+            continue;
         }
-
-        if final_oracle != final_expected {
+        let result = outcome(&actual, &reference, case.sort_output);
+        if result == DiffOutcome::Match {
+            passed += 1;
+            eprintln!("[pass] {}", case.name);
+        } else {
             failures.push(format!(
-                "Test '{}' ({}) Oracle grep produced unexpected output",
-                case.name, case_path
+                "{} ({case_path}): {result:?}; oracle={reference:?}",
+                case.name
             ));
         }
     }
-
-    if !failures.is_empty() {
-        for f in &failures {
-            eprintln!("{f}");
-            eprintln!("--------------------------------------------------");
-        }
-        panic!("{} differential tests failed!", failures.len());
-    }
+    eprintln!(
+        "[summary] total={total} parity={passed} rgrep_only={local} skipped={skipped} known_gnu_divergences={known} failed={}",
+        failures.len()
+    );
+    assert_eq!(total, passed + local + skipped + known + failures.len());
+    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
 }

@@ -1,0 +1,56 @@
+name: Differential verification
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        features: [default, perl-regexp]
+    runs-on: ${{ matrix.os }}
+    env:
+      RGREP_ORACLE: /usr/bin/grep
+      LC_ALL: C
+      CARGO_TERM_COLOR: never
+      FEATURES: ${{ matrix.features }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libpcre2-dev pkg-config
+      - name: Install native dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install pcre2 pkg-config
+      - name: Install verified Rust toolchain
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal --component clippy --component rustfmt
+          rustup default 1.98.1
+      - name: Verify build, lint and differential coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p verification-logs
+          "$RGREP_ORACLE" --version | tee verification-logs/oracle.txt
+          feature_args=()
+          if [[ "$FEATURES" == "perl-regexp" ]]; then
+            feature_args=(--features perl-regexp)
+          fi
+          cargo fmt --check
+          cargo build --locked "${feature_args[@]}"
+          cargo clippy --locked --tests "${feature_args[@]}" -- -D warnings
+          cargo test --locked "${feature_args[@]}" -- --nocapture 2>&1 | tee verification-logs/tests.txt
+      - name: Save coverage and divergence report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-${{ matrix.os }}-${{ matrix.features }}
+          path: verification-logs/
+          if-no-files-found: warn

@@ -1,5 +1,7 @@
 name = "-T with -n ordering"
 args = ["-T", "-n", "foo"]
+gnu_difference = "GNU right-aligns the line number then emits a tab; rgrep currently prepends a tab."
+gnu_stdout = "                  1:\tfoo\n"
 stdin = "foo\n"
 expected_stdout = "\t1:foo\n"
 expected_exit_code = 0

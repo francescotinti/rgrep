@@ -3,5 +3,5 @@ args = ["-P", "foo"]
 stdin = "foo\n"
 expected_stdout = ""
 expected_exit_code = 2
-skip_if_bsd = true
-skip_reason = "BSD grep has different error message or behavior for -P"
+rgrep_only = true
+forbids_feature = "perl-regexp"

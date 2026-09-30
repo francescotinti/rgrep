@@ -1,11 +1,9 @@
 # Porting Overview
 
-> Current baseline (2026-09-30, commit `759524b`): 2,277 Rust source lines,
-> 129 manifest cases, 32 default unit tests (34 with PCRE2), one differential
-> harness and three property tests. Property comparisons are skipped on BSD.
-> The original size/test tables below describe Step 17. Functional scope is
-> completed, but full GNU compatibility is not established; the GNU 3.12
-> baseline run exposed eight differences being classified in the new audit.
+> Updated 2026-09-30: 2,379 Rust source lines (including inline tests),
+> 129 manifest cases and 42 default / 44 PCRE2 Rust tests. GNU differences
+> and actual executed coverage are tracked in `GNU_VERIFICATION.md`.
+> Functional scope is complete; full GNU compatibility is not claimed.
 
 > Copyright (c) 2026 Francesco Tinti <francesco.tinti@activemind.it>
 > AI-assisted port — Architect: Claude Opus 4.7 (Anthropic) · Implementer: Gemini Antigravity (Google)
@@ -21,12 +19,12 @@ the port is intentionally not documented here.
 | | Origin | Target |
 |---|---|---|
 | Language | C | Rust 2024 edition |
-| Reference | [GNU grep](https://git.savannah.gnu.org/cgit/grep.git) (~4.5K LOC C, 5 modules) | `rgrep` (~1.5K LOC Rust, 5 modules) |
+| Reference | [GNU grep](https://git.savannah.gnu.org/cgit/grep.git) (~4.5K LOC C, 5 modules) | `rgrep` (~2.4K LOC Rust, 7 modules) |
 | Build | autotools + gnulib | cargo |
 | Crate ecosystem | n/a | `regex`, `aho-corasick`, `walkdir`, `globset`, `memmap2`, `pcre2` (optional) |
 
-**Compression**: ~70% C-to-Rust (4500 → ~1500 LOC) thanks to mature
-ecosystem crates absorbing the matcher, traversal, glob, and mmap layers.
+**Source size**: ~4500 C lines versus 2379 Rust lines including inline tests.
+Crate implementations are excluded; this is not an algorithmic equivalence metric.
 
 ## Feature parity (vs GNU grep)
 
@@ -104,9 +102,10 @@ ecosystem crates absorbing the matcher, traversal, glob, and mmap layers.
 
 | Type | Count |
 |---|---|
-| Differential testcases (vs system `grep`) | 74 (manifest-driven TOML) |
-| Property-based proptest cases | ~3,000 (3 strategies × ~1,000) |
-| Unit tests | 29+ |
+| Manifest testcases | 129 (see GNU_VERIFICATION.md for actual parity/skip counts) |
+| Property-based comparisons | 3072 per GNU run; skipped on BSD |
+| Library unit tests | 34 default, 36 with PCRE2 |
+| Other Rust tests | 3 boundary tests + 2 harness tests + 3 properties |
 
 The differential harness invokes `rgrep` and the system `grep` with
 identical args+stdin, then compares stdout byte-for-byte and exit codes.

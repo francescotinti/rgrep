@@ -101,5 +101,19 @@ Search using memory-mapping for maximum speed and stop after 5 matches:
 rgrep --mmap -m 5 "foo" large_file.log
 ```
 
+## Verification status (2026-09-30)
+
+The current suite has 129 manifest cases and 42 default / 44 PCRE2 Rust tests.
+GNU grep 3.12 and BSD grep were exercised locally on macOS. GNU runs perform
+3072 generated comparisons each; BSD runs explicitly skip those properties.
+Four known GNU differences remain in binary diagnostics and `-T` alignment.
+See [GNU_VERIFICATION.md](GNU_VERIFICATION.md) for pass/skip counts and commands.
+The Linux/macOS CI matrix is configured; the Linux run is still pending.
+
+Ondata 7's delimiter optimization reduced elapsed time by roughly 9–12% on
+three amplified count workloads in alternating pre/post measurements; small
+CLI workloads were mostly flat. See [PERF_REPORT.md](PERF_REPORT.md) for raw
+evidence, uncertainty and the small fixed-quiet regression.
+
 ## 📜 License
 This project is open-source and built for educational and practical usage.

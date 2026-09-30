@@ -1,5 +1,8 @@
 name = "--label in binary message"
 args = ["--label=BIN", "foo"]
+gnu_difference = "GNU writes binary-match diagnostics to stderr; rgrep retains historical stdout behavior."
+gnu_stdout = ""
+gnu_stderr_contains = "BIN: binary file matches"
 stdin = "foo\u0000bar\n"
 expected_stdout = "Binary file BIN matches\n"
 expected_exit_code = 0

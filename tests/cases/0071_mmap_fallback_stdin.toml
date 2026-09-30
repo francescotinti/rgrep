@@ -1,5 +1,6 @@
 name = "--mmap fallback on stdin"
 args = ["--mmap", "foo"]
+oracle_args = ["foo"]
 stdin = "foo\nbar\nfoo\n"
 expected_stdout = "foo\nfoo\n"
 expected_exit_code = 0

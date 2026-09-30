@@ -11,22 +11,12 @@ use proptest::prelude::*;
 use std::io::Write;
 use std::process::{Command, Stdio};
 
-fn is_bsd_grep() -> bool {
-    let output = Command::new("grep")
-        .arg("--version")
-        .output()
-        .expect("Failed to execute grep --version");
-
-    let version_str = String::from_utf8_lossy(&output.stdout);
-    let version_err = String::from_utf8_lossy(&output.stderr);
-
-    version_str.contains("BSD grep")
-        || (!version_str.contains("GNU") && !version_err.contains("GNU"))
-}
+mod common;
 
 fn run_rgrep(args: &[&str], stdin: &[u8]) -> (i32, Vec<u8>) {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_rgrep"));
     cmd.args(args)
+        .env("LC_ALL", "C")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -41,8 +31,9 @@ fn run_rgrep(args: &[&str], stdin: &[u8]) -> (i32, Vec<u8>) {
 }
 
 fn run_oracle(args: &[&str], stdin: &[u8]) -> (i32, Vec<u8>) {
-    let mut cmd = Command::new("grep");
+    let mut cmd = Command::new(&common::oracle().executable);
     cmd.args(args)
+        .env("LC_ALL", "C")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -65,7 +56,7 @@ proptest! {
         pattern in "[a-zA-Z0-9]{1,8}",
         input in "[a-zA-Z0-9\n ]{0,200}",
     ) {
-        if is_bsd_grep() { return Ok(()); }
+        if common::oracle().is_bsd { return Ok(()); }
 
         let rgrep_out = run_rgrep(&[&pattern], input.as_bytes());
         let oracle_out = run_oracle(&[&pattern], input.as_bytes());
@@ -79,7 +70,7 @@ proptest! {
         body in "[a-zA-Z0-9]{0,5}",
         input in "[a-zA-Z0-9 \n]{0,150}",
     ) {
-        if is_bsd_grep() { return Ok(()); }
+        if common::oracle().is_bsd { return Ok(()); }
 
         let pat = format!("{anchor}{body}");
         let rgrep_out = run_rgrep(&[&pat], input.as_bytes());
@@ -94,7 +85,7 @@ proptest! {
         negate in any::<bool>(),
         input in "[a-zA-Z0-9 \n]{0,150}",
     ) {
-        if is_bsd_grep() { return Ok(()); }
+        if common::oracle().is_bsd { return Ok(()); }
 
         let pat = if negate {
             format!("[^{class_body}]")

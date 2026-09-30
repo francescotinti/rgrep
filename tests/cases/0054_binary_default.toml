@@ -1,5 +1,8 @@
 name = "binary detection default"
 args = ["foo", "{FIXTURES}/bin.dat"]
+gnu_difference = "GNU writes binary-match diagnostics to stderr; rgrep retains historical stdout behavior."
+gnu_stdout = ""
+gnu_stderr_contains = ": binary file matches"
 stdin = ""
 expected_stdout = "Binary file {FIXTURES}/bin.dat matches\n"
 expected_exit_code = 0
