@@ -39,14 +39,14 @@ jobs:
           set -euo pipefail
           mkdir -p verification-logs
           "$RGREP_ORACLE" --version | tee verification-logs/oracle.txt
-          feature_args=()
+          set --
           if [[ "$FEATURES" == "perl-regexp" ]]; then
-            feature_args=(--features perl-regexp)
+            set -- --features perl-regexp
           fi
           cargo fmt --check
-          cargo build --locked "${feature_args[@]}"
-          cargo clippy --locked --tests "${feature_args[@]}" -- -D warnings
-          cargo test --locked "${feature_args[@]}" -- --nocapture 2>&1 | tee verification-logs/tests.txt
+          cargo build --locked "$@"
+          cargo clippy --locked --tests "$@" -- -D warnings
+          cargo test --locked "$@" -- --nocapture 2>&1 | tee verification-logs/tests.txt
       - name: Save coverage and divergence report
         if: always()
         uses: actions/upload-artifact@v4
