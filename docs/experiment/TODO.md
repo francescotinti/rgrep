@@ -147,9 +147,15 @@ in `tests/testsuite.toml`:
 | 0083 | binary -m1 message | `-m1 foo {FIXTURES}/bin.dat` | stdout `""`, stderr contiene il messaggio | GNU; `skip_if_bsd` |
 
 Unit test in `src/runner.rs` (≥3): formato del messaggio con nome file,
-con `(standard input)`, con label; `-q` non emette nulla su stderr
-(catturare la scrittura tramite il writer già iniettato in `PrintCtx` se
-esiste, altrimenti `// DESIGN-Q:` sul modo di catturare stderr e fermarsi).
+con `(standard input)`, con label; `-q` non emette nulla su stderr.
+
+*Emendamento Architect 2026-09-30 (pre-implementazione)*: `PrintCtx` non ha
+un writer iniettato e introdurne uno eccede D BD.8. La testabilità si
+ottiene con due helper puri nel ramo `is_binary`: `binary_match_message(
+filename, label) -> String` (formato, nome, `(standard input)`, label) e
+`reports_binary_match(&OutputOpts) -> bool` (falso con `-q`, `-c`, `-l`,
+`-L`; vero altrimenti). Gli unit test coprono i due helper; il canale
+stderr reale è coperto dal campo `expected_stderr_contains` dei case.
 
 ### D BD.7 — Conteggi attesi post-implementazione
 
