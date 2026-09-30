@@ -339,6 +339,17 @@ report was authoritative).
 
 # Ondata 6 post-fix
 
+> **2026-09-30 verification correction:** historical evidence below is retained,
+> but its median columns and Criterion change estimates do not consistently
+> refer to the same pre-run. For example 4.023 → 3.749 ms is −6.81%, not −1.21%.
+> The saved change JSON confirms −1.21%, but the original corresponding pre-run
+> is no longer available in `base/` (Criterion overwrites it). These historical
+> numbers cannot substantiate a new acceptance gate. Furthermore, the old
+> `regex_simple` benchmark passed an invalid regex (two literal backslashes
+> before `(`) and ignored exit 2. Its historical timing measured failure,
+> not search. The standalone profiling command used a different, valid pattern.
+> Ondata 6-bis repairs this and introduces explicitly named baselines.
+
 **Date**: 2026-05-18 (same day as Ondata 4 baseline + Ondata 5 post-fix)
 **Pre-fix commit**: `6ab7be1` (post-Ondata 5)
 **Fix applied**: PERF-FIX-O6 (byte-input fast path for pure count/quiet
@@ -474,3 +485,63 @@ Ondata 5 row of this same report (the comparison baseline criterion
 loaded from `target/criterion/<group>/base/`). Post-medians are read
 from `target/criterion/<group>/new/estimates.json` produced by the
 2026-05-18 ~16:24 GMT+2 bench run.
+
+# Ondata 6-bis — verified baseline (2026-09-30)
+
+The search implementation is unchanged from `759524b`. Fixed the invalid
+`regex_simple` pattern, reject benchmark exits other than 0/1, add `fixed_boolean`
+count/quiet and amplified `line_scan` (grep.c ×60). Ten benchmark groups.
+The amplified cases isolate full scans; quiet remains an early-exit workload.
+No speedup over O6 is claimed: these are new measurements on rustc 1.98.1.
+
+Named baseline: `o6bis-20260930`, 30 samples (recursive walk 20), 1 s warm-up,
+2 s requested measurement; Criterion extends sampling where necessary.
+Estimates including confidence intervals and fixture hash are committed in
+`reports/o6bis-20260930.json`. Deltas in subsequent reports are computed from
+the actual named median pair using `tools/summarize_bench.py`, not from
+Criterion's mutable last-run directory. Small CLI timings include startup
+and exhibit substantial noise; use amplified scans and paired confirmation.
+
+| Scenario | Pre ms | Post ms | Median delta |
+|---|---:|---:|---:|
+| cow_impact/color_always_count_only | — | 6.5688 | — |
+| cow_impact/color_always_with_output | — | 7.0073 | — |
+| cow_impact/color_never_count_only | — | 6.6572 | — |
+| cow_impact/color_never_with_output | — | 6.7960 | — |
+| fixed_boolean/count | — | 4.9487 | — |
+| fixed_boolean/quiet | — | 4.9743 | — |
+| fixed_string_F/rgrep | — | 8.2142 | — |
+| fixed_string_F/ripgrep | — | 20.9021 | — |
+| fixed_string_F/system_grep | — | 7.9918 | — |
+| invert_match/rgrep | — | 6.8961 | — |
+| invert_match/ripgrep | — | 15.3347 | — |
+| invert_match/system_grep | — | 5.6240 | — |
+| line_scan/fixed_count | — | 15.0003 | — |
+| line_scan/invert_count | — | 17.0361 | — |
+| line_scan/regex_count | — | 17.8880 | — |
+| literal_match_count/rgrep | — | 7.1021 | — |
+| literal_match_count/ripgrep | — | 17.4639 | — |
+| literal_match_count/system_grep | — | 7.1707 | — |
+| mmap_vs_bufread/bufread_default | — | 6.2936 | — |
+| mmap_vs_bufread/mmap_explicit | — | 6.4165 | — |
+| quiet_mode/rgrep | — | 4.8533 | — |
+| quiet_mode/ripgrep | — | 6.9465 | — |
+| quiet_mode/system_grep | — | 3.4187 | — |
+| recursive_walk/rgrep | — | 8.0059 | — |
+| recursive_walk/ripgrep | — | 17.3915 | — |
+| recursive_walk/system_grep | — | 7.6699 | — |
+| regex_simple/rgrep | — | 7.3946 | — |
+| regex_simple/ripgrep | — | 15.9087 | — |
+| regex_simple/system_grep | — | 5.7287 | — |
+
+Reproduction (run in rgrep with the upstream fixture directory available):
+
+```sh
+cargo bench --bench search -- --save-baseline o6bis-20260930 --sample-size 30 --warm-up-time 1 --measurement-time 2
+python3 tools/summarize_bench.py o6bis-20260930 --json reports/o6bis-20260930.json
+```
+
+Validation: default tests (36), PCRE2 baseline tests (38), build, Clippy
+including benches, fmt and full benchmark execution passed. Only the known
+ExFAT incremental hard-link warning appeared. GNU baseline differences are
+tracked separately; this wave does not claim full GNU parity.

@@ -21,6 +21,11 @@ fn run(cmd: &str, args: &[&str]) {
         .args(args)
         .output()
         .expect("failed to spawn benchmarked command");
+    assert!(
+        matches!(output.status.code(), Some(0 | 1)),
+        "benchmark command failed: {cmd} {args:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     // Drop output explicitly so criterion does not optimise the spawn away.
     let _ = output.stdout.len();
     let _ = output.stderr.len();
@@ -66,7 +71,7 @@ fn bench_literal_match_count(c: &mut Criterion) {
 fn bench_regex_simple(c: &mut Criterion) {
     let mut group = c.benchmark_group("regex_simple");
     let rgrep = env!("CARGO_BIN_EXE_rgrep");
-    let pattern = "^[a-z]+\\(";
+    let pattern = r"^[a-z]+\(";
     let file = "../gnu-grep/src/grep.c";
     group.bench_function("rgrep", |b| {
         b.iter(|| run(rgrep, &["-E", pattern, file]));
@@ -198,6 +203,38 @@ fn bench_quiet_mode(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_fixed_boolean(c: &mut Criterion) {
+    let mut group = c.benchmark_group("fixed_boolean");
+    let rgrep = env!("CARGO_BIN_EXE_rgrep");
+    for (name, flag) in [("count", "-cF"), ("quiet", "-qF")] {
+        group.bench_function(name, |b| {
+            b.iter(|| run(rgrep, &[flag, "MB_LEN_MAX", "../gnu-grep/src/grep.c"]));
+        });
+    }
+    group.finish();
+}
+
+fn bench_line_scan(c: &mut Criterion) {
+    // Amplify useful work so process startup does not hide delimiter costs.
+    let fixture_dir = std::path::Path::new("target/bench_fixtures");
+    std::fs::create_dir_all(fixture_dir).unwrap();
+    let fixture = fixture_dir.join("line_scan.c");
+    let source = std::fs::read("../gnu-grep/src/grep.c").unwrap();
+    std::fs::write(&fixture, source.repeat(60)).unwrap();
+    let mut group = c.benchmark_group("line_scan");
+    let rgrep = env!("CARGO_BIN_EXE_rgrep");
+    for (name, flag, pattern) in [
+        ("regex_count", "-cE", r"^[a-z]+\("),
+        ("invert_count", "-vc", "^$"),
+        ("fixed_count", "-cF", "MB_LEN_MAX"),
+    ] {
+        group.bench_function(name, |b| {
+            b.iter(|| run(rgrep, &[flag, pattern, fixture.to_str().unwrap()]));
+        });
+    }
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_literal_match_count,
@@ -208,5 +245,7 @@ criterion_group!(
     bench_cow_impact,
     bench_mmap_vs_bufread,
     bench_quiet_mode,
+    bench_fixed_boolean,
+    bench_line_scan,
 );
 criterion_main!(benches);

@@ -1,5 +1,12 @@
 # Porting Overview
 
+> Current baseline (2026-09-30, commit `759524b`): 2,277 Rust source lines,
+> 129 manifest cases, 32 default unit tests (34 with PCRE2), one differential
+> harness and three property tests. Property comparisons are skipped on BSD.
+> The original size/test tables below describe Step 17. Functional scope is
+> completed, but full GNU compatibility is not established; the GNU 3.12
+> baseline run exposed eight differences being classified in the new audit.
+
 > Copyright (c) 2026 Francesco Tinti <francesco.tinti@activemind.it>
 > AI-assisted port — Architect: Claude Opus 4.7 (Anthropic) · Implementer: Gemini Antigravity (Google)
 
