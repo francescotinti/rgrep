@@ -110,7 +110,8 @@ Four known GNU differences remain in binary diagnostics and `-T` alignment.
 See [GNU_VERIFICATION.md](GNU_VERIFICATION.md) for pass/skip counts and commands.
 The first CI run passed both Linux builds and macOS with PCRE2. The default
 macOS job exposed a Bash 3 argument-handling issue, corrected in the workflow;
-see [publication status](docs/experiment/PUBLICATION.md).
+the second run (`36766955016`) passed all four jobs. See
+[publication status](docs/experiment/PUBLICATION.md).
 
 Ondata 7's delimiter optimization reduced elapsed time by roughly 9–12% on
 three amplified count workloads in alternating pre/post measurements; small
@@ -119,10 +120,12 @@ evidence, uncertainty and the small fixed-quiet regression.
 
 ## Experiment history
 
-The [experiment documentation](docs/experiment/README.md) includes the project
-plan, specifications, audit log, session handoff, development diaries and
-archived commit scripts. See its [publication notes](docs/experiment/PUBLICATION.md)
-for provenance and the relationship with the original local workspace.
+The [experiment documentation](docs/experiment/README.md) is split into
+what remains to do (`TODO.md`), what was delivered (`DONE.md`) and the
+architecture with its evolution (`ARCHITECTURE.md`), plus the full
+historical specifications, audit log, diaries and archived commit scripts
+under `history/`. See its [publication notes](docs/experiment/PUBLICATION.md)
+for provenance.
 
 ## 📜 License
 This project is open-source and built for educational and practical usage.

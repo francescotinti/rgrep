@@ -1,28 +1,37 @@
-# Pubblicazione della documentazione dell’esperimento
+# Pubblicazione e provenienza della documentazione
 
-Snapshot esportato il 2026-09-30 dal workspace locale `testag-grep`.
-Il repository esterno non ha un remoto: l’utente ha scelto di pubblicare
-la documentazione dentro `francescotinti/rgrep`, nella presente cartella.
+## Situazione corrente (dal 2026-09-30, sera)
 
-- Anchor della documentazione outer: `3cdf1a3` (hash locale, non presente
-  nella cronologia del repository rgrep).
-- Anchor codice pubblicato prima di questo snapshot: `3e9d38f`.
-- Inclusi: README del workspace, istruzioni storiche CLAUDE, piano,
-  specifiche, audit, handoff, tutti gli otto diari e 19 script storici di commit.
-- Gli script in `_archive/commit_scripts/` sono conservati come documentazione:
-  contengono percorsi locali originali e non sono comandi di setup del progetto.
-- Cache, log e configurazioni locali di Serena/Vexp, file macOS, target di
-  compilazione e checkout upstream GNU non fanno parte dello snapshot.
-- La frase «nessun push effettuato» nei report precedenti descrive la chiusura
-  locale antecedente alla richiesta di pubblicazione; il codice è ora su GitHub.
-- La prima run CI è partita dopo il push del codice:
-  [Differential verification](https://github.com/francescotinti/rgrep/actions/runs/36766671569).
-  Entrambi i job Linux e macOS con PCRE2 sono passati. macOS default è fallito
-  prima della build per un array vuoto sotto Bash 3 con nounset; il workflow
-  è stato corretto usando parametri posizionali. L’esito della nuova run va
-  verificato nella pagina Actions.
+Questa cartella è la **sede nativa** della documentazione dell'esperimento,
+non più uno snapshot. Il workspace outer `testag-grep` (senza remoto)
+conserva soltanto `CLAUDE.md` con le regole operative; tutto il resto è
+stato spostato qui e riorganizzato in [TODO.md](TODO.md), [DONE.md](DONE.md)
+e [ARCHITECTURE.md](ARCHITECTURE.md), con il materiale storico integrale
+in [history/](history/).
 
-I link Markdown verso rgrep sono adattati; comandi e percorsi citati nelle
-specifiche storiche restano quelli originali. Per build e test usare il
-[README del codice](../../README.md) e il [report GNU](../../GNU_VERIFICATION.md).
-Per future modifiche alla documentazione esterna aggiornare anche lo snapshot.
+Per modificare la documentazione si lavora direttamente in questo repository.
+
+## Storico della pubblicazione
+
+- Codice pubblicato su `https://github.com/francescotinti/rgrep` il
+  2026-09-30 a partire da `3e9d38f`.
+- Prima run CI `36766671569` (su `3e9d38f`): Linux default e PCRE2 verdi,
+  macOS PCRE2 verde; macOS default fallito prima della build perché Bash 3
+  rifiuta un array vuoto sotto `set -u`. Corretto in `ab26dc4` con parametri
+  posizionali. Dettagli in `reports/ci-first-run-20260930.json`.
+- Seconda run CI `36766955016` (su `92285c7`): verde su tutti e quattro i
+  job. È la prima esecuzione della suite con oracolo GNU su Linux.
+- `92285c7` aveva importato uno snapshot dei documenti outer (anchor outer
+  `3cdf1a3`, hash non presente in questa cronologia); lo snapshot è stato
+  sostituito dalla riorganizzazione corrente.
+
+## Note di provenienza
+
+- Gli script in `history/commit_scripts/` contengono percorsi locali
+  originali e non sono comandi di setup del progetto.
+- Percorsi shell e hash citati dentro `history/` descrivono l'ambiente
+  outer originale (`/Volumes/Extreme Pro/Claude/testag-grep`).
+- Cache e configurazioni locali (Serena, Vexp), file macOS `._*`, target
+  di compilazione e il checkout upstream `gnu-grep/` non fanno parte del
+  repository; i benchmark richiedono `gnu-grep/` come sibling, i test e la
+  CI no.

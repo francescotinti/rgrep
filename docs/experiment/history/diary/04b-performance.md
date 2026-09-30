@@ -4,7 +4,7 @@ Questo capitolo chiude il ciclo dell'esperimento sul lato **misura**: dopo
 le tre ondate di pulizia (Ondata 1 lint, Ondata 2 strutturale, Ondata 3
 architetturale), Ondata 4 ha trasformato in numeri ciò che fino a quel
 momento erano ipotesi. Il deliverable tecnico vive in
-[`rgrep/PERF_REPORT.md`](../../../PERF_REPORT.md); qui raccontiamo *cosa*
+[`rgrep/PERF_REPORT.md`](../rgrep/PERF_REPORT.md); qui raccontiamo *cosa*
 abbiamo deciso di misurare, *come* lo abbiamo misurato e *cosa* ne
 abbiamo imparato.
 

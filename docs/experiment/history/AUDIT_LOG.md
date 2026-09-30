@@ -80,10 +80,10 @@
 
 ## Audit Step 0 — commit 04f94dc
 
-**Data**: 2026-05-03
-**Verdetto**: 🟡 PARTIAL
-**Build**: cargo build verde (2 warning filesystem-related su incremental cache exFAT, **0 warning di codice**)
-**Test**: 1 cargo test (`test_differential`) verde, internamente esercita 5 casi
+**Data**: 2026-05-03  
+**Verdetto**: 🟡 PARTIAL  
+**Build**: cargo build verde (2 warning filesystem-related su incremental cache exFAT, **0 warning di codice**)  
+**Test**: 1 cargo test (`test_differential`) verde, internamente esercita 5 casi  
 **Repo**: il commit è in `rgrep/.git`, non nel repo outer `testag-grep` (che è ancora vuoto: 0 commit). Outside-scope ma da sistemare prima di Step 1.
 
 ### D-decisioni applicate

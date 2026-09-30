@@ -4,7 +4,8 @@ Executed locally on macOS arm64, rustc 1.98.1, GNU grep 3.12 (Homebrew)
 and BSD grep 2.6.0-FreeBSD. After publication, the [first CI run](https://github.com/francescotinti/rgrep/actions/runs/36766671569)
 **passed both Linux configurations and macOS with PCRE2**. The default macOS
 job failed before the build because Bash 3 rejects an empty array under
-`set -u`; the workflow now uses positional arguments. The report below
+`set -u`; the workflow now uses positional arguments and the second run
+(`36766955016`, on `92285c7`) passed all four jobs. The report below
 records the earlier local verification; see `reports/ci-first-run-20260930.json`
 and [publication notes](docs/experiment/PUBLICATION.md) for remote status.
 

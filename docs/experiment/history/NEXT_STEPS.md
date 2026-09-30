@@ -998,7 +998,7 @@ D 3.1..3.10 tutti applicati) ma rilevato:
 
 ### D 3-bis.1 — Rimuovere `tests/debug_cli.rs`
 File scratchpad debug con `fn main()`, non un vero test. Non rompe nulla
-(cargo test esegue il binario, 0 test rilevati) ma è rumore.
+(cargo test esegue il binario, 0 test rilevati) ma è rumore. 
 
 ```bash
 cd rgrep
@@ -2382,7 +2382,7 @@ come literal pattern. Se ugrep diverge, marcare con DESIGN-Q.
 ### D 8.5 — Combinazione filtri
 Order of evaluation per ogni file/dir:
 1. **Directory** durante traversal: scarta se matcha `--exclude-dir`
-2. **File** durante traversal:
+2. **File** durante traversal: 
    - Se `--include` specificato: scarta se NON matcha nessun include
    - Se matcha qualche `--exclude` o `--exclude-from`: scarta
    - Altrimenti: include nel risultato
@@ -3630,7 +3630,7 @@ Aggiornare `diary/03-translation-log.md` con entry per Misc flags.
 - ✅ `cargo build` 0 warning di codice
 - ✅ `cargo test` verde — 68 differential + ≥31 unit
 - ✅ I 5 nuovi testcase passano
-- ✅ Live exec: `rgrep -T foo <<<foo` → `\tfoo`
+- ✅ Live exec: `rgrep -T foo <<<foo` → `\tfoo` 
 - ✅ Live exec: `rgrep --label=X foo <<<foo` → no observable diff senza prefix; con `-H` → `X:foo`
 - ✅ Diary 03 aggiornato
 - ✅ DUE commit (rgrep + outer), entrambi **format integrale**
@@ -4303,7 +4303,7 @@ blocchi shell, uno per ogni repo, NON un solo blocco che cambia cwd a metà
 # Block 1 (rgrep)
 cd /path/rgrep && cargo build && cargo test && git add -A && git commit -m "feat..."
 
-# Block 2 (outer)
+# Block 2 (outer)  
 cd /path && git add diary/ && git commit -m "docs..."
 ```
 
@@ -5338,7 +5338,7 @@ tests/proptest_differential.rs |  45 ++---
 
 99% del diff = fmt-reflow (long-line break, multi-line struct, import
 reorder, trailing whitespace). 1% = un fix semantico: `manual_flatten` in
-[rgrep/src/matcher.rs](../../src/matcher.rs):
+[rgrep/src/matcher.rs](rgrep/src/matcher.rs):
 
 ```rust
 // PRIMA
@@ -5500,7 +5500,7 @@ caso di ambiguità non coperta, aprire `// DESIGN-Q:` e taggare lo step
 ### D-Ondata-2.1 — Naming: rimuovere prefisso `get_`
 
 **Anti-pattern**: rust-skill `coding-guidelines` (P.NAM.04 — no `get_` prefix on
-accessors). 3 occorrenze in [rgrep/src/cli.rs](../../src/cli.rs):
+accessors). 3 occorrenze in [rgrep/src/cli.rs](rgrep/src/cli.rs):
 
 ```
 get_after_context  → after_context_lines  (per evitare collisione con field `after_context: usize`)
@@ -5549,7 +5549,7 @@ sparse in `runner.rs` + `matcher.rs`.
 
 **Anti-pattern**: rust-skill `domain-cli` — `std::process::exit()` in library
 code rompe la composabilità (test harness, library reuse). 1 occorrenza:
-[rgrep/src/matcher.rs:75](../../src/matcher.rs#L75).
+[rgrep/src/matcher.rs:75](rgrep/src/matcher.rs#L75).
 
 **Strategia**:
 1. Sostituire `std::process::exit(2)` con `return Err(RgrepError::PcreUnavailable)`.
@@ -5562,7 +5562,7 @@ code rompe la composabilità (test harness, library reuse). 1 occorrenza:
 
 **Anti-pattern**: rust-skill `m15-anti-pattern` — funzioni > 100 LOC con
 cognitive complexity > 30 sono untestable e error-prone. Funzione in
-[rgrep/src/runner.rs](../../src/runner.rs) (lookup `fn bufread_search`).
+[rgrep/src/runner.rs](rgrep/src/runner.rs) (lookup `fn bufread_search`).
 
 **Strategia**: estrarre `MatchContext` struct privato + helper method:
 
@@ -5646,7 +5646,7 @@ Semantica preservata. Diff netto: -3 righe.
 
 **Anti-pattern**: rust-skill `unsafe-checker` — ogni blocco `unsafe` deve
 avere un commento `// SAFETY:` che giustifica le invarianti. 1 occorrenza in
-[rgrep/src/runner.rs](../../src/runner.rs) (lookup `MmapOptions::new`).
+[rgrep/src/runner.rs](rgrep/src/runner.rs) (lookup `MmapOptions::new`).
 
 **Strategia**: aggiungere sopra il blocco unsafe:
 

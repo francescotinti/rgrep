@@ -1,77 +1,40 @@
-# testag-grep — GNU grep → Rust (esperimento multi-agent)
+# Documentazione dell'esperimento testag-grep
 
-> Snapshot della documentazione del workspace esterno. Percorsi shell e
-> hash outer descrivono l’ambiente originale; i link Markdown al codice
-> sono adattati al repository GitHub. Vedi [PUBLICATION.md](PUBLICATION.md).
+Porting di **GNU grep** (C, ~4,5K LOC) verso Rust (`rgrep`, ~2,4K LOC)
+con workflow multi-agent Architect/Implementer/Decider, seguendo la skill
+`legacy-port`. Gemello metodologico di `rawk` (One True Awk → Rust).
 
-Esperimento di porting di **GNU grep** (C, ~4.5K LOC) verso Rust (`rgrep/`,
-~2.4K LOC) seguendo la skill `legacy-port` con workflow a tre ruoli:
-**Architect/Auditor** (scrive SPEC e audita), **Implementer** (implementa uno
-step alla volta, un commit per step) e **Decider** (umano, relay e decisioni
-finali). Gemello metodologico di `rawk` (One True Awk → Rust).
+La documentazione è divisa in tre file, per tre domande:
 
-## Stato (2026-09)
-
-- Step 0–19: porting funzionale completato (flag principali di GNU grep,
-  `-P` via feature opzionale `perl-regexp`/pcre2, mmap, contesto, ricorsione,
-  filtri, binary/NUL handling).
-- Ondate 1–7 + 6-bis: ✅ chiuse. Benchmark corretti, baseline esplicite,
-  scansione delimitatori con `memchr`; benefici misurati circa 9–12% sui
-  tre scenari count amplificati (nessuna promessa universale).
-- Verifica GNU/BSD locale completata, default e PCRE2: 42/44 test Rust;
-  129 casi manifest con conteggi parità/skip/divergenze separati, 6144
-  confronti generativi GNU nella sessione. Quattro divergenze GNU restano aperte.
-- CI Linux/macOS predisposta e verificata staticamente; **Linux non eseguito**.
-- Anchor corrente rgrep: `3e9d38f`. Prossime priorità: run Linux e correzione
-  output binario / allineamento `-T`, non nuove ottimizzazioni speculative.
-
-Dettagli operativi e handoff in [SESSION_HANDOFF.md](SESSION_HANDOFF.md).
-
-## Layout
-
-| Path | Contenuto |
+| Domanda | File |
 |---|---|
-| `rgrep/` | Il port Rust. **Repo git annidato** (branch `main`), gitlink senza `.gitmodules`. |
-| `gnu-grep/` | Snapshot upstream GNU grep (C + 149 testcase shell), riferimento read-only. |
-| `minigrep.c`, `Cargo.toml`, `src/main.rs` | Placeholder didattico originale (~30 LOC). **Non è il progetto**: ignorare. |
-| `CLAUDE.md` | Ruoli, comandi, regole invariabili, gotcha ambiente. |
-| `NEXT_STEPS.md` | Backlog e SPEC contrattuali (D-decisioni) per ogni Step/Ondata. |
-| `AUDIT_LOG.md` | Verdetti di audit con anchor hash. |
-| `EXPERIMENT_PLAN.md` | Mappatura sulle fasi della skill `legacy-port`. |
-| `diary/` | Semantic model, mapping table, translation log, divergenze, performance, profiling, conclusioni, metriche. |
+| Cosa resta da fare? | [TODO.md](TODO.md) — backlog ordinato, SPEC degli step attivi, scope-out |
+| Cosa è stato fatto? | [DONE.md](DONE.md) — metriche verificate, cronologia step e ondate, lezioni, registro audit con anchor |
+| Com'è fatto e come ci è arrivato? | [ARCHITECTURE.md](ARCHITECTURE.md) — moduli C e strategia per modulo, struttura Rust, flusso, testing, divergenze, evoluzione |
 
-## Build e test
+Le regole operative (ruoli, comandi, gate, anti-pattern) sono nel
+`CLAUDE.md` alla radice del workspace outer, unico file rimasto lì.
 
-Tutto avviene in `rgrep/`, mai nella root:
+## Materiale storico integrale
 
-```bash
-cd rgrep
-cargo build
-cargo test                                  # differential vs grep di sistema + proptest + unit
-cargo clippy --tests -- -D warnings
-cargo fmt --check
-cargo test --features perl-regexp           # abilita -P (richiede libpcre2)
-cargo bench                                 # criterion, vedi rgrep/PERF_REPORT.md
-```
+In [history/](history/), congelato al 2026-09-30. Percorsi e hash citati
+al suo interno si riferiscono al workspace outer originale.
 
-I testcase differenziali sono file TOML in `rgrep/tests/cases/` registrati in
-`rgrep/tests/testsuite.toml`. L'oracolo è il `grep` di sistema: su macOS è
-BSD grep, quindi le divergenze GNU-only sono marcate `skip_if_bsd`.
+- [NEXT_STEPS.md](history/NEXT_STEPS.md) — tutte le SPEC (D-decisioni) di Step 0–19 e Ondate 1–7, ~7 800 righe. Navigare con `rg -n '^# ' history/NEXT_STEPS.md`.
+- [AUDIT_LOG.md](history/AUDIT_LOG.md) — verdetti integrali con checklist e anchor.
+- [EXPERIMENT_PLAN.md](history/EXPERIMENT_PLAN.md) — piano iniziale (maggio 2026) con stime e predizioni.
+- [SESSION_HANDOFF.md](history/SESSION_HANDOFF.md) — ultimo handoff prima della riorganizzazione.
+- [README-workspace.md](history/README-workspace.md) — README del workspace outer.
+- [diary/](history/diary/) — 01 semantic model, 02 mapping table, 03 translation log, 04a divergences, 04b performance, 05 profiling, 99 conclusions, metrics.
+- [commit_scripts/](history/commit_scripts/) — 19 script del pattern relay-shell (Step 10–19), conservati come documentazione: contengono percorsi locali.
 
-## Documentazione del port
+## Documentazione del codice (fuori da questa cartella)
 
-- [rgrep/README.md](../../README.md) — feature supportate e uso della CLI
-- [rgrep/PORTING.md](../../PORTING.md) — cosa è stato consegnato
-- [rgrep/PERF_REPORT.md](../../PERF_REPORT.md) — benchmark vs grep di sistema
-- [rgrep/PROFILE_REPORT.md](../../PROFILE_REPORT.md) — profiling samply e fix mirati
-- [rgrep/GNU_VERIFICATION.md](../../GNU_VERIFICATION.md) — copertura reale, divergenze e CI
-- [diary/99-conclusions.md](diary/99-conclusions.md) — lezioni apprese sul workflow multi-agent
+- [README](../../README.md) — feature e uso della CLI
+- [PORTING.md](../../PORTING.md) — cosa è stato consegnato
+- [GNU_VERIFICATION.md](../../GNU_VERIFICATION.md) — copertura reale, divergenze, riproduzione
+- [PERF_REPORT.md](../../PERF_REPORT.md) e [PROFILE_REPORT.md](../../PROFILE_REPORT.md) — benchmark e profili, con appendici 6-bis/O7
+- [tests/README.md](../../tests/README.md) — schema dei testcase e oracolo
+- [reports/](../../reports/) — JSON versionati di bench, profili, verifica e CI
 
-## Riferimento C originale
-
-Il placeholder `minigrep.c` resta compilabile per confronto storico:
-
-```bash
-gcc minigrep.c -o minigrep_c
-./minigrep_c <pattern> <filename>
-```
+Provenienza e pubblicazione: [PUBLICATION.md](PUBLICATION.md).
