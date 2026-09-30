@@ -28,14 +28,14 @@ commit che l'ha introdotta. Le SPEC storiche (Step 0–19, Ondate 1–7) sono in
 
 ## Step attivi
 
-Uno step scritto, **🔒 LOCKED** in attesa di promozione del Decider.
+Uno step **🚧 PRONTO PER IMPLEMENTER** (promosso dal Decider il 2026-09-30).
 
 ---
 
-# 🔒 Step BD — Diagnostica binaria: messaggio su stderr e `-c` completo
+# 🚧 Step BD — Diagnostica binaria: messaggio su stderr e `-c` completo
 
-**Stato**: 🔒 LOCKED — SPEC scritta dall'Architect il 2026-09-30, baseline
-`f2710b4`. Da promuovere a 🚧 PRONTO dal Decider.
+**Stato**: 🚧 PRONTO PER IMPLEMENTER — promosso dal Decider il 2026-09-30,
+baseline `8ccbc91` (codice identico a `f2710b4`). Implementer: Claude Fable 5.1.
 **Chiude**: divergenze GNU 0054 e 0067 (TODO P2). Prerequisito di P4
 (strict mode) insieme allo Step per `-T`.
 **Evidenza**: `reports/binary-diag-evidence-20260930.txt` (31 combinazioni
