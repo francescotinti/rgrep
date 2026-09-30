@@ -1,8 +1,8 @@
 # TODO — cosa resta da fare
 
 > Backlog attivo dell'esperimento `testag-grep` (GNU grep → Rust).
-> Aggiornato: 2026-09-30. Codice `rgrep` su `main` = `92285c7` (pubblicato su
-> GitHub, CI verde 4/4). Ultimo audit registrato: `3e9d38f`.
+> Aggiornato: 2026-09-30. Codice `rgrep` su `main` = `f2710b4` (pubblicato su
+> GitHub, CI verde 4/4). Ultimo audit registrato: `f2710b4` (anchor).
 > Cosa è già stato fatto: [DONE.md](DONE.md). Come è fatto il progetto:
 > [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -32,21 +32,17 @@ Nessuno. Stato: 🔒 tutto LOCKED in attesa di promozione.
 
 ## Backlog ordinato per priorità
 
-### P1 — Chiudere il ciclo di audit sui commit post-anchor
+### ~~P1 — Chiudere il ciclo di audit sui commit post-anchor~~ ✅ chiuso 2026-09-30
 
-Due commit `rgrep` sono stati pubblicati dopo l'ultimo audit (`3e9d38f`)
-senza voce di verifica:
+Audit di `ab26dc4`, `92285c7`, `9e9a09a`, `f2710b4` registrato in
+[DONE.md](DONE.md#audit-commit-post-anchor--2026-09-30--ab26dc4f2710b4--approved);
+anchor spostato a `f2710b4`.
 
-| Commit | Contenuto | Rischio |
-|---|---|---|
-| `ab26dc4` | `fix(ci)`: il workflow usava un array vuoto sotto `set -u`, rifiutato da Bash 3 su macOS; sostituito con parametri posizionali | solo CI, nessun codice |
-| `92285c7` | `docs`: snapshot della documentazione outer dentro `docs/experiment/` (ora sostituito dalla presente riorganizzazione) | solo documentazione |
-
-Azione: l'Auditor verifica i diff, registra il verdetto e sposta l'anchor a
-`92285c7` (o al commit della riorganizzazione documentale, se successivo).
-Gli ultimi tre audit (Ondata 6-bis, Ondata 7, verifica GNU) sono
-**autoverifiche di Codex**, dichiarate come non indipendenti: una
-rilettura indipendente da parte dell'Auditor Claude è ancora aperta.
+Resta aperta la **rilettura indipendente** degli audit di Ondata 6-bis,
+Ondata 7 e verifica GNU, che Codex ha dichiarato come autoverifiche: i gate
+sono stati rieseguiti verdi su `f2710b4` (stesso codice di `3e9d38f`), ma
+la checklist 12/12 contro le SPEC emendate non è stata ripercorsa da un
+Auditor diverso. Priorità bassa: nessuna evidenza contraria emersa.
 
 ### P2 — SPEC "diagnostica binaria" (casi 0054, 0067) 🔒
 

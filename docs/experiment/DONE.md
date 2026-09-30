@@ -1,7 +1,7 @@
 # DONE — cosa è stato fatto
 
 > Registro di ciò che l'esperimento `testag-grep` ha consegnato e verificato.
-> Aggiornato: 2026-09-30. Da fare: [TODO.md](TODO.md). Architettura:
+> Aggiornato: 2026-09-30 (anchor `f2710b4`). Da fare: [TODO.md](TODO.md). Architettura:
 > [ARCHITECTURE.md](ARCHITECTURE.md). Testi integrali di SPEC e audit:
 > [history/](history/).
 
@@ -169,6 +169,39 @@ questa sezione; l'anchor è sempre l'ultimo verdetto ✅.
 | 2026-05-04 | Step 18–19 | ✅ | `b9e797e` | Claude Opus 4.7 |
 | 2026-05-18 | Ondate 1–6 | ✅ 12/12 ciascuna | `759524b` | Claude Opus 4.7 (Implementer e Auditor in sessioni distinte) |
 | 2026-09-30 | Ondata 6-bis, Ondata 7, verifica GNU | ✅ | `3e9d38f` | **Codex, autoverifica**: non indipendente |
-| — | `ab26dc4`, `92285c7` | non auditati | — | vedi [TODO.md P1](TODO.md#p1--chiudere-il-ciclo-di-audit-sui-commit-post-anchor) |
+| 2026-09-30 | Commit post-anchor `ab26dc4`, `92285c7`, `9e9a09a`, `f2710b4` | ✅ | `f2710b4` | Claude Fable 5.1, Auditor read-only; i due commit doc `9e9a09a`/`f2710b4` sono dello stesso agente (autoverifica sulla parte documentale) |
 
-**Anchor corrente: `3e9d38f`.** HEAD `main`: `92285c7`.
+**Anchor corrente: `f2710b4`.** HEAD `main`: `f2710b4`.
+
+### Audit commit post-anchor — 2026-09-30 — `ab26dc4`..`f2710b4` — ✅ APPROVED
+
+Baseline `3e9d38f`. Quattro commit, nessuno tocca `src/`, `tests/`,
+`benches/` o `Cargo.*` (verificato con `git diff --name-only` per commit).
+
+| Commit | File | Verifica |
+|---|---|---|
+| `ab26dc4` `fix(ci)` | `.github/workflows/verify.yml` +5/−5 | Sostituisce `feature_args=()` (array vuoto, rifiutato da Bash 3 con `set -u`) con `set --` / `set -- --features perl-regexp` e `"$@"`. Semantica identica per i job PCRE2; sblocca macOS default. |
+| `92285c7` `docs` | 34 file in `docs/`, `README.md`, `GNU_VERIFICATION.md`, `reports/ci-first-run-20260930.json` | Snapshot doc outer (poi sostituito) e registrazione della prima run CI. Solo documentazione. |
+| `9e9a09a` `docs` | 38 file in `docs/`, `README.md`, `GNU_VERIFICATION.md` | Riorganizzazione TODO/DONE/ARCHITECTURE/history. Solo documentazione. |
+| `f2710b4` `docs` | `CLAUDE.md` +54 | Contesto operativo per il checkout pubblicato. Solo documentazione. |
+
+Gate eseguiti su `f2710b4`, macOS arm64, rustc 1.98.1, target APFS:
+
+- `cargo build --locked`: 0 warning.
+- `cargo clippy --locked --tests --benches --all-features -- -D warnings`: exit 0.
+- `cargo fmt --check`: pulito.
+- `RGREP_ORACLE=/opt/homebrew/bin/ggrep cargo test --locked`: 42 passati;
+  manifest 121 parità / 1 solo rgrep / 3 skip / 4 divergenze note / 0 falliti;
+  3072 confronti generativi.
+- Stesso comando con `--features perl-regexp`: 44 passati; 124 / 0 / 1 / 4 / 0;
+  3072 confronti.
+- CI remota: `36766955016` (`92285c7`), `36769848791` (`9e9a09a`),
+  `36770314047` (`f2710b4`) tutte verdi 4/4. La run fallita `36766671569`
+  su `3e9d38f` è quella corretta da `ab26dc4`.
+
+Note: il messaggio `proptest: FileFailurePersistence::SourceParallel set,
+but failed to find lib.rs or main.rs` compare quando `CARGO_TARGET_DIR` è
+fuori dall'albero; è un avviso sulla persistenza dei controesempi, non un
+fallimento. Formato commit: `ab26dc4` e `92285c7` hanno solo titolo
+(commit di Codex fuori dal ciclo step); `9e9a09a` e `f2710b4` hanno il
+body IN-SCOPE/OUT-OF-SCOPE. Nessun leftover: nessuno step `-bis`.
