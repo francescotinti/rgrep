@@ -520,3 +520,26 @@ each other's noise envelopes.
 - **`regex::bytes::Regex` engine swap**: dedicated "engine swap" wave.
   Would close most of the `regex_simple` / `invert_match` gap; requires
   rewriting `Matcher` and the trait. ~150 LOC.
+
+# Ondata 7 re-profile — 2026-09-30
+
+Same rustc 1.98.1, `-vc '^$'` on grep.c ×60, 60 child runs, 4000 Hz.
+Pre-change is `723aab3`; post-change uses the shared memchr reader. Existing
+section 1 harness/analyser commands apply with PROFILE_RUN_ITERS=60 and
+`target/bench_fixtures/line_scan.c`. Full text summaries are committed in
+`reports/o7-profile-before.txt` and `reports/o7-profile-after.txt`; raw
+samply JSON remains gitignored in `target/profiles/o7-{before,after}.json`.
+
+| Metric | Before | After |
+|---|---:|---:|
+| rgrep samples | 2923 | 2331 |
+| std memchr_aligned self | 46.3% | 4.8% |
+| new read_delimited self (includes inlined scanner) | — | 29.3% |
+| memmove self | 10.8% | 19.9% |
+
+Do not treat disappearing symbols or changing sample shares as absolute
+speedups: scanner work is partly attributed to the inlined helper. The
+paired wall-time benchmark independently measures about −12% for this
+workload. Copies and UTF-8 validation remain material; no claim that all
+scanning now consumes <15% is made. The older fixed_string_F profile had
+8.4% memchr and was filesystem-bound, not a 32–38% scanner target.

@@ -374,6 +374,35 @@ fn process_line(
     }
 }
 
+// PERF-FIX-O7-1: share SIMD delimiter scanning across general and count/quiet
+// paths. The current baseline attributes 46.3% of invert-count samples to
+// std's memchr_aligned (PROFILE_REPORT.md, 2026-09-30).
+fn read_delimited<R: BufRead>(
+    reader: &mut R,
+    delimiter: u8,
+    buffer: &mut Vec<u8>,
+) -> io::Result<usize> {
+    let mut total = 0;
+    loop {
+        let chunk = match reader.fill_buf() {
+            Ok(chunk) => chunk,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
+        };
+        if chunk.is_empty() {
+            return Ok(total);
+        }
+        let end = memchr::memchr(delimiter, chunk);
+        let used = end.map_or(chunk.len(), |index| index + 1);
+        buffer.extend_from_slice(&chunk[..used]);
+        reader.consume(used);
+        total += used;
+        if end.is_some() {
+            return Ok(total);
+        }
+    }
+}
+
 #[allow(clippy::unnecessary_wraps)] // Result kept for forward-compat with future I/O propagation
 fn bufread_search<R: BufRead>(
     pctx: &PrintCtx,
@@ -430,7 +459,7 @@ fn bufread_search<R: BufRead>(
     if pure_count_quiet {
         loop {
             buffer.clear();
-            match reader.read_until(delimiter, &mut buffer) {
+            match read_delimited(&mut reader, delimiter, &mut buffer) {
                 Ok(0) => break,
                 Ok(_) => {}
                 Err(e) => {
@@ -462,7 +491,7 @@ fn bufread_search<R: BufRead>(
 
     loop {
         buffer.clear();
-        let bytes_read = match reader.read_until(delimiter, &mut buffer) {
+        let bytes_read = match read_delimited(&mut reader, delimiter, &mut buffer) {
             Ok(0) => break,
             Ok(n) => n,
             Err(e) => {
@@ -1095,5 +1124,78 @@ mod tests {
         // This simulates bufread_search being called on stdin despite config.binary_opts.mmap
         let result = bufread_search(&pctx, &matcher, cursor).unwrap();
         assert!(result);
+    }
+
+    #[test]
+    fn delimiter_reader_matches_std_across_buffer_boundaries() {
+        let inputs = [
+            Vec::new(),
+            b"\n\nlast".to_vec(),
+            b"first\r\nsecond\0\xfftail".to_vec(),
+            [vec![b'x'; 20_003], b"\nend\0".to_vec()].concat(),
+        ];
+        for input in inputs {
+            for capacity in 1..=17 {
+                for delimiter in [b'\n', 0] {
+                    let mut expected_reader = BufReader::with_capacity(capacity, &input[..]);
+                    let mut actual_reader = BufReader::with_capacity(capacity, &input[..]);
+                    loop {
+                        // read_until appends and returns only the newly read length.
+                        let mut expected = b"prefix".to_vec();
+                        let mut actual = expected.clone();
+                        let expected_len = expected_reader
+                            .read_until(delimiter, &mut expected)
+                            .unwrap();
+                        let actual_len =
+                            read_delimited(&mut actual_reader, delimiter, &mut actual).unwrap();
+                        assert_eq!(actual_len, expected_len);
+                        assert_eq!(actual, expected);
+                        if actual_len == 0 {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn delimiter_reader_retries_interrupts_and_preserves_partial_errors() {
+        struct InterruptedThenError<'a> {
+            remaining: &'a [u8],
+            interrupted: bool,
+        }
+        impl io::Read for InterruptedThenError<'_> {
+            fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
+                panic!("reader must use fill_buf/consume");
+            }
+        }
+        impl BufRead for InterruptedThenError<'_> {
+            fn fill_buf(&mut self) -> io::Result<&[u8]> {
+                if !self.interrupted {
+                    self.interrupted = true;
+                    return Err(io::ErrorKind::Interrupted.into());
+                }
+                if self.remaining.is_empty() {
+                    return Err(io::Error::other("injected failure"));
+                }
+                Ok(&self.remaining[..self.remaining.len().min(3)])
+            }
+            fn consume(&mut self, amount: usize) {
+                self.remaining = &self.remaining[amount..];
+            }
+        }
+        let mut reader = InterruptedThenError {
+            remaining: b"ab\nrest",
+            interrupted: false,
+        };
+        let mut buffer = Vec::new();
+        assert_eq!(read_delimited(&mut reader, b'\n', &mut buffer).unwrap(), 3);
+        assert_eq!(buffer, b"ab\n");
+        assert_eq!(reader.remaining, b"rest");
+        buffer.clear();
+        let error = read_delimited(&mut reader, b'\n', &mut buffer).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::Other);
+        assert_eq!(buffer, b"rest");
     }
 }

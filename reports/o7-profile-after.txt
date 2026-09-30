@@ -1,0 +1,51 @@
+=== Profile: target/profiles/o7-after.json ===
+Threads: 61 | Samples by process: {'profile_run': 391, 'rgrep': 2331}
+
+--- Process: profile_run (samples=391) ---
+  TOP 10 BY SELF (% leaf-frame):
+     60.4%  (  236) poll
+     25.3%  (   99) __posix_spawn
+      6.1%  (   24) __wait4
+      3.6%  (   14) __open
+      2.8%  (   11) stat
+      0.8%  (    3) close
+      0.3%  (    1) __fcntl
+      0.3%  (    1) _platform_memmove
+      0.3%  (    1) std::sys::process::unix::common::Command::capture_env
+      0.3%  (    1) libsystem_c.dylib!0x3136c
+  TOP 10 BY TOTAL (% anywhere-in-stack):
+    100.0%  (  391) profile_run::main
+    100.0%  (  391) std::sys::backtrace::__rust_begin_short_backtrace
+    100.0%  (  391) std::rt::lang_start::{{closure}}
+    100.0%  (  391) std::rt::lang_start_internal
+    100.0%  (  391) main
+    100.0%  (  391) start
+     99.7%  (  390) std::process::Command::output
+     61.1%  (  239) std::sys::pal::unix::pipe::read2
+     60.4%  (  236) poll
+     32.5%  (  127) std::sys::process::unix::unix::<impl std::sys::process::unix::common::Command>::spawn
+
+--- Process: rgrep (samples=2331) ---
+  TOP 10 BY SELF (% leaf-frame):
+     29.3%  (  684) rgrep::runner::read_delimited::<core::io::cursor::Cursor<alloc::vec::Vec<u8>>>
+     19.9%  (  464) _platform_memmove
+     16.7%  (  389) core::str::converts::from_utf8
+      7.9%  (  183) <regex_automata::meta::regex::Regex>::search_half
+      7.3%  (  171) rgrep::runner::run
+      4.8%  (  111) core::slice::memchr::memchr_aligned
+      2.8%  (   65) read
+      2.7%  (   64) <regex::regex::string::Regex as rgrep::matcher::MatchEngine>::engine_is_match_bytes
+      2.0%  (   46) rgrep!0x193350
+      0.9%  (   21) regex_automata::dfa::search::find_fwd::<&regex_automata::dfa::dense::DFA<alloc::vec::Vec<u32>>>
+  TOP 10 BY TOTAL (% anywhere-in-stack):
+    100.0%  ( 2331) rgrep::main
+    100.0%  ( 2331) std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+    100.0%  ( 2331) std::rt::lang_start::<()>::{closure#0}
+    100.0%  ( 2331) std::rt::lang_start_internal
+    100.0%  ( 2331) main
+    100.0%  ( 2331) start
+     99.3%  ( 2314) rgrep::runner::run
+     51.2%  ( 1193) rgrep::runner::read_delimited::<core::io::cursor::Cursor<alloc::vec::Vec<u8>>>
+     29.8%  (  695) <regex::regex::string::Regex as rgrep::matcher::MatchEngine>::engine_is_match_bytes
+     19.9%  (  464) _platform_memmove
+

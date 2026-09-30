@@ -758,6 +758,7 @@ dependencies = [
  "criterion",
  "fancy-regex",
  "globset",
+ "memchr",
  "memmap2",
  "pcre2",
  "proptest",
