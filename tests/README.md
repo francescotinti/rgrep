@@ -42,10 +42,15 @@ Additional manifest fields:
   discrepancy with separately verified outputs on both sides. Existing rgrep
   expectations remain enforced. An unexpected change or resolution fails.
   These cases are reported as known differences, never as parity passes.
+- `expected_stderr_contains`: byte substring that **rgrep's** stderr must
+  contain (`{FIXTURES}` is expanded). Never checked on the oracle, whose
+  stderr wording differs (`grep:` vs `rgrep:` prefix). Used by the binary
+  diagnostic cases (0054, 0067, 0076, 0080–0083), which are `skip_if_bsd`
+  because BSD grep prints that message on stdout.
 
-Set `RGREP_STRICT_GNU=1` to reject every known GNU difference. Four remain:
-0054/0067 binary diagnostics use stdout in rgrep and stderr in GNU;
-0064/0065 implement different `-T` alignment. See `GNU_VERIFICATION.md`.
+Set `RGREP_STRICT_GNU=1` to reject every known GNU difference. Two remain:
+0064/0065 implement different `-T` alignment. The binary diagnostics
+(0054/0067) were aligned to GNU >= 3.5 by Step BD. See `GNU_VERIFICATION.md`.
 The obsolete generic `expected_to_fail` escape hatch has been removed;
 unknown manifest fields are rejected instead of silently ignored.
 

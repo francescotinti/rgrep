@@ -1,8 +1,8 @@
-name = "--label in binary message"
-args = ["--label=BIN", "foo"]
+name = "binary stdin default label"
+args = ["foo"]
 stdin = "foo\u0000bar\n"
 expected_stdout = ""
-expected_stderr_contains = "rgrep: BIN: binary file matches\n"
+expected_stderr_contains = "rgrep: (standard input): binary file matches\n"
 expected_exit_code = 0
 skip_if_bsd = true
 skip_reason = "BSD grep prints the binary-match message on stdout (GNU >= 3.5 uses stderr)"

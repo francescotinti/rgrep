@@ -31,6 +31,9 @@ struct TestCase {
     stdin: String,
     expected_stdout: String,
     expected_exit_code: i32,
+    /// Byte substring that rgrep's own stderr must contain (never checked on
+    /// the oracle; `gnu_stderr_contains` covers that side).
+    expected_stderr_contains: Option<String>,
     #[serde(default)]
     skip_if_bsd: bool,
     #[serde(default)]
@@ -194,9 +197,17 @@ fn test_differential() {
             fs::remove_dir_all(&fixture_dir).unwrap();
         }
         let expected = expand(&case.expected_stdout);
+        let stderr_ok = case.expected_stderr_contains.as_ref().is_none_or(|needle| {
+            let needle = expand(needle);
+            actual
+                .stderr
+                .windows(needle.len())
+                .any(|part| part == needle.as_bytes())
+        });
         if actual.status.code() != Some(case.expected_exit_code)
             || normalize(&actual.stdout, case.sort_output)
                 != normalize(expected.as_bytes(), case.sort_output)
+            || !stderr_ok
         {
             failures.push(format!(
                 "{} ({case_path}): rgrep differs from fixture: {actual:?}",

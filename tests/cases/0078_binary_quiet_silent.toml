@@ -1,0 +1,9 @@
+name = "binary -q silent"
+args = ["-q", "foo", "{FIXTURES}/bin.dat"]
+stdin = ""
+expected_stdout = ""
+expected_exit_code = 0
+
+[[fixture_files]]
+name = "bin.dat"
+content = "foo\u0000bar\n"

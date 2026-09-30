@@ -344,16 +344,17 @@ fn process_line(
     }
 
     if is_binary {
-        if output.count || output.files_with_matches || output.files_without_match {
-            return LineOutcome::Break;
+        // Step BD: GNU >= 3.5 semantics. `-c` keeps counting every matching
+        // line; `-l`/`-L` stop at the first match; otherwise report once on
+        // stderr (never stdout) and stop. `-s` does not suppress it (GNU 3.8).
+        if output.count {
+            return LineOutcome::Continue;
         }
-        let display_name = if pctx.filename == "-" {
-            output.label.as_str()
-        } else {
-            pctx.filename
-        };
-        println!("Binary file {display_name} matches");
-        return LineOutcome::Return(true);
+        if reports_binary_match(output) {
+            eprint!("{}", binary_match_message(pctx.filename, &output.label));
+            return LineOutcome::Return(true);
+        }
+        return LineOutcome::Break;
     }
 
     if output.files_with_matches || output.files_without_match {
@@ -566,6 +567,19 @@ fn bufread_search<R: BufRead>(
 
     emit_trailing_summary(pctx, &state, has_match);
     Ok(has_match)
+}
+
+/// Whether a matching binary file produces the "binary file matches"
+/// diagnostic: suppressed by `-q`, `-c`, `-l`, `-L`, by nothing else.
+const fn reports_binary_match(output: &crate::cli::OutputOpts) -> bool {
+    !(output.quiet || output.count || output.files_with_matches || output.files_without_match)
+}
+
+/// GNU >= 3.5 wording: `PROG: NAME: binary file matches`, where stdin uses
+/// the `--label` value (default `(standard input)`).
+fn binary_match_message(filename: &str, label: &str) -> String {
+    let name = if filename == "-" { label } else { filename };
+    format!("rgrep: {name}: binary file matches\n")
 }
 
 /// Print the before-context history (if any), the match line itself (or its
@@ -1038,6 +1052,52 @@ mod tests {
     #[test]
     fn test_run_result_semantics() {
         assert_ne!(RunResult::MatchFound, RunResult::NoMatch);
+    }
+
+    #[test]
+    fn binary_match_message_uses_file_name() {
+        assert_eq!(
+            binary_match_message("dir/bin.dat", "(standard input)"),
+            "rgrep: dir/bin.dat: binary file matches\n"
+        );
+    }
+
+    #[test]
+    fn binary_match_message_uses_default_stdin_label() {
+        assert_eq!(
+            binary_match_message("-", "(standard input)"),
+            "rgrep: (standard input): binary file matches\n"
+        );
+    }
+
+    #[test]
+    fn binary_match_message_uses_custom_label_for_stdin() {
+        assert_eq!(
+            binary_match_message("-", "LBL"),
+            "rgrep: LBL: binary file matches\n"
+        );
+    }
+
+    #[test]
+    fn binary_match_is_reported_unless_quiet_count_or_list_mode() {
+        let parse = |flags: &[&str]| {
+            let mut argv = vec![std::ffi::OsString::from("rgrep")];
+            argv.extend(flags.iter().map(std::ffi::OsString::from));
+            argv.push(std::ffi::OsString::from("foo"));
+            crate::cli::Config::parse_args(argv).unwrap()
+        };
+        assert!(reports_binary_match(&parse(&[]).output_opts));
+        // -s suppresses file errors, not the binary-match diagnostic (GNU 3.8).
+        assert!(reports_binary_match(&parse(&["-s"]).output_opts));
+        assert!(reports_binary_match(
+            &parse(&["-o", "-n", "-m1"]).output_opts
+        ));
+        for silent in [["-q"], ["-c"], ["-l"], ["-L"]] {
+            assert!(
+                !reports_binary_match(&parse(&silent).output_opts),
+                "{silent:?} must stay silent"
+            );
+        }
     }
 
     #[test]

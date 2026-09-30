@@ -1,0 +1,16 @@
+name = "binary two files"
+args = ["foo", "{FIXTURES}/a.dat", "{FIXTURES}/b.dat"]
+stdin = ""
+expected_stdout = ""
+expected_stderr_contains = "rgrep: {FIXTURES}/a.dat: binary file matches\nrgrep: {FIXTURES}/b.dat: binary file matches\n"
+expected_exit_code = 0
+skip_if_bsd = true
+skip_reason = "BSD grep prints the binary-match message on stdout (GNU >= 3.5 uses stderr)"
+
+[[fixture_files]]
+name = "a.dat"
+content = "foo\u0000bar\n"
+
+[[fixture_files]]
+name = "b.dat"
+content = "foo\u0000baz\n"

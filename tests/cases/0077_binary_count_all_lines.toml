@@ -1,0 +1,9 @@
+name = "binary -c counts all lines"
+args = ["-c", "foo", "{FIXTURES}/bin.dat"]
+stdin = ""
+expected_stdout = "2\n"
+expected_exit_code = 0
+
+[[fixture_files]]
+name = "bin.dat"
+content = "foo\u0000bar\nfoo again\n"

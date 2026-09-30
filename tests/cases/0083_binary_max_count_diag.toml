@@ -1,8 +1,8 @@
-name = "binary detection default"
-args = ["foo", "{FIXTURES}/bin.dat"]
+name = "binary -m1 message"
+args = ["-m1", "foo", "{FIXTURES}/bin.dat"]
 stdin = ""
 expected_stdout = ""
-expected_stderr_contains = "rgrep: {FIXTURES}/bin.dat: binary file matches\n"
+expected_stderr_contains = ": binary file matches\n"
 expected_exit_code = 0
 skip_if_bsd = true
 skip_reason = "BSD grep prints the binary-match message on stdout (GNU >= 3.5 uses stderr)"

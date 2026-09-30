@@ -9,7 +9,30 @@ job failed before the build because Bash 3 rejects an empty array under
 records the earlier local verification; see `reports/ci-first-run-20260930.json`
 and [publication notes](docs/experiment/PUBLICATION.md) for remote status.
 
-## Measured coverage
+## Update after Step BD (binary diagnostics, 2026-09-30)
+
+Step BD routes the "binary file matches" message to stderr with the GNU >= 3.5
+wording (`rgrep: NAME: binary file matches`), keeps it under `-s`, silences it
+under `-q`/`-c`/`-l`/`-L`, and makes `-c` count every matching line of a
+binary file (previously stopped at 1; GNU and BSD both count all). Eight cases
+were added (0076–0083) and 0054/0067 now assert the GNU behaviour; the cases
+that depend on the stderr channel are `skip_if_bsd` because BSD grep prints
+the message on stdout. Evidence: `reports/binary-diag-evidence-20260930.txt`
+(31 flag combinations before and after).
+
+| Oracle / build | Parity | rgrep only | Skipped | Known differences | Failed | Rust tests |
+|---|---:|---:|---:|---:|---:|---:|
+| gnu-default | 131 | 1 | 3 | 2 | 0 | 46 |
+| gnu-pcre | 134 | 0 | 1 | 2 | 0 | 48 |
+| bsd-default | 113 | 1 | 23 | 0 | 0 | 46 |
+| bsd-pcre | 113 | 0 | 24 | 0 | 0 | 48 |
+
+137 manifest cases. `RGREP_STRICT_GNU=1` now fails exactly on the two `-T`
+cases (0064/0065). The `-cv` count on a binary file still differs from GNU
+(GNU treats NUL as a line terminator after detection; rgrep and BSD do not);
+this GNU-only semantics is tracked as backlog, not as a manifest exception.
+
+## Measured coverage (3e9d38f, before Step BD)
 
 There are 129 manifest cases. Counts distinguish actual parity from explicit
 exceptions; they sum to 129 in each configuration. The full local Rust suites
@@ -38,9 +61,10 @@ The first GNU execution of the old harness failed eight cases:
   check of rgrep's optimization, not a claim that GNU accepts that option.
 - One unavailable-PCRE test: GNU's compiled capabilities differ. This now
   verifies rgrep alone without PCRE2 and skips when the feature is enabled.
-- Four **unfixed semantic differences**: binary diagnostics (0054, 0067) go
-  to stdout in rgrep but stderr in GNU; initial-tab alignment (0064, 0065)
-  differs. They are still technical debt, not compatibility successes.
+- Four **unfixed semantic differences**: binary diagnostics (0054, 0067) went
+  to stdout in rgrep but stderr in GNU (fixed by Step BD, see above);
+  initial-tab alignment (0064, 0065) still differs and remains technical
+  debt, not a compatibility success.
   Existing rgrep expected outputs were not changed. Separately recorded GNU
   outputs are checked as well, so these exceptions cannot hide arbitrary
   regressions. An unexpected resolution also fails and requires review.
