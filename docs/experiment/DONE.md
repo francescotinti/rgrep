@@ -10,17 +10,17 @@
 | Metrica | Valore |
 |---|---|
 | Rust `src/*.rs` (con test inline) | 2 379 righe (era 741 nella baseline Gemini pre-esperimento) |
-| Test Rust: default / PCRE2 | 42 / 44 |
-| Casi nel manifest differenziale | 129 |
-| GNU 3.12 default: parità / solo rgrep / skip / divergenze note | 121 / 1 / 3 / 4 |
-| GNU 3.12 PCRE2: parità / solo rgrep / skip / divergenze note | 124 / 0 / 1 / 4 |
-| BSD 2.6.0 default: parità / solo rgrep / skip | 112 / 1 / 16 |
-| BSD 2.6.0 PCRE2: parità / solo rgrep / skip | 112 / 0 / 17 |
+| Test Rust: default / PCRE2 | 46 / 48 |
+| Casi nel manifest differenziale | 137 |
+| GNU 3.12 default: parità / solo rgrep / skip / divergenze note | 131 / 1 / 3 / 2 |
+| GNU 3.12 PCRE2: parità / solo rgrep / skip / divergenze note | 134 / 0 / 1 / 2 |
+| BSD 2.6.0 default: parità / solo rgrep / skip | 113 / 1 / 23 |
+| BSD 2.6.0 PCRE2: parità / solo rgrep / skip | 113 / 0 / 24 |
 | Confronti generativi (proptest) per build GNU | 3 072 (6 144 nella sessione) |
 | Gruppi benchmark Criterion | 10 |
 | Ondata 7, count amplificati (coppie alternate) | −9,15% / −11,98% / −10,33% |
-| CI GitHub (Linux + macOS × default + PCRE2) | verde 4/4, run `36766955016` su `92285c7` |
-| Step chiusi | 17 principali + 8 `-bis` + 2 riapertura = 27, tutti ✅ APPROVED |
+| CI GitHub (Linux + macOS × default + PCRE2) | verde 4/4, run `36773050146` su `7865f61` |
+| Step chiusi | 17 principali + 8 `-bis` + 2 riapertura = 27, tutti ✅ APPROVED; Step BD 🟢 FATTO, audit pending |
 | Ondate chiuse | 1, 2, 3, 4, 5, 6, 6-bis, 7 + verifica GNU, tutte ✅ |
 
 Dati grezzi: `reports/verification-20260930.json`,
@@ -91,6 +91,20 @@ Esecutore Codex; audit come autoverifica dichiarata.
 | 7 | `3de67b0` | `memchr = "2"` diretto; helper privato `read_delimited` condiviso dai due loop di `bufread_search`; 5 test nuovi (contratto reader + CLI); 31 coppie alternate pre/post con bootstrap: −9,15/−11,98/−10,33% sui count amplificati, `fixed_quiet` +3,52% [1,41; 5,22] dichiarato | ✅ |
 | Verifica GNU | `3e9d38f` | Oracolo esplicito `RGREP_ORACLE` con identità GNU/BSD; conteggi parità/skip/divergenze separati; confronto byte anche con exit ≠ 0; `oracle_args` per `--mmap`; `rgrep_only`/`forbids_feature`; `gnu_difference` con output GNU registrato e `RGREP_STRICT_GNU`; rimosso `expected_to_fail`; test confini buffer; workflow CI | ✅ locale |
 
+### Fase 6 — Step BD, diagnostica binaria (2026-09-30, sera) — 🟢 FATTO, audit pending
+
+| Commit | Ruolo | Contenuto |
+|---|---|---|
+| `8ccbc91` | Architect | SPEC Step BD con evidenza a 31 combinazioni (`reports/binary-diag-evidence-20260930.txt`) |
+| `841b0b0` | Decider | Promozione 🔒 → 🚧 |
+| `898c4bb` | Architect | Emendamento D BD.6: testabilità via helper puri |
+| `7865f61` | Implementer (Claude Fable 5.1) | Messaggio `rgrep: NAME: binary file matches` su stderr, `-s` non lo sopprime, `-q/-c/-l/-L` sì; `-c` conta tutte le righe di un file binario (era 1); campo harness `expected_stderr_contains`; 8 case nuovi (0076–0083), 0054/0067 riscritti `skip_if_bsd`; 4 unit test. TDD: rosso verificato (6 errori di compilazione, 8 case falliti), poi verde. CI `36773050146` verde 4/4 |
+
+Misure su `7865f61`: GNU default 131/1/3/2/0 (46 test), GNU PCRE2 134/0/1/2/0
+(48), BSD default 113/1/23/0/0, BSD PCRE2 113/0/24/0/0; strict mode fallisce
+solo su 0064/0065. Scostamento da D BD.7: parità BSD 113, non 115, perché
+0054/0067 erano contati come parità BSD e ora sono skip.
+
 ### Fase 5 — Pubblicazione (2026-09-30, sera)
 
 | Commit | Contenuto |
@@ -106,12 +120,14 @@ Esecutore Codex; audit come autoverifica dichiarata.
 
 ## Verifica GNU: cosa dicono davvero i numeri
 
-- Le 129 righe del manifest si sommano esattamente in ogni configurazione:
-  parità + solo-rgrep + skip + divergenze note + falliti = 129.
+- Le righe del manifest (129 al `3e9d38f`, 137 dopo lo Step BD) si sommano
+  esattamente in ogni configurazione: parità + solo-rgrep + skip +
+  divergenze note + falliti = totale.
 - Gli 8 fallimenti del vecchio harness contro GNU 3.12 sono stati classificati:
   3 casi `--mmap` (opzione rifiutata da GNU moderno → `oracle_args`),
   1 caso `-P` senza feature (→ `rgrep_only` + `forbids_feature`),
-  4 divergenze semantiche reali (→ `gnu_difference`, restano debito).
+  4 divergenze semantiche reali (→ `gnu_difference`; 0054/0067 chiuse dallo
+  Step BD, 0064/0065 restano debito).
 - Su BSD i tre proptest saltano esplicitamente: un run BSD verde **non**
   prova parità generativa. Prima del 2026-09-30 questo era invisibile.
 - `RGREP_STRICT_GNU=1` fallisce esattamente sui quattro casi noti.

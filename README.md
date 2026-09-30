@@ -103,10 +103,11 @@ rgrep --mmap -m 5 "foo" large_file.log
 
 ## Verification status (2026-09-30)
 
-The current suite has 129 manifest cases and 42 default / 44 PCRE2 Rust tests.
+The current suite has 137 manifest cases and 46 default / 48 PCRE2 Rust tests.
 GNU grep 3.12 and BSD grep were exercised locally on macOS. GNU runs perform
 3072 generated comparisons each; BSD runs explicitly skip those properties.
-Four known GNU differences remain in binary diagnostics and `-T` alignment.
+Two known GNU differences remain, both in `-T` alignment; the binary-match
+diagnostic follows GNU >= 3.5 (stderr) since Step BD.
 See [GNU_VERIFICATION.md](GNU_VERIFICATION.md) for pass/skip counts and commands.
 The first CI run passed both Linux builds and macOS with PCRE2. The default
 macOS job exposed a Bash 3 argument-handling issue, corrected in the workflow;

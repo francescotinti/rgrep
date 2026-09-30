@@ -1,7 +1,7 @@
 # Porting Overview
 
 > Updated 2026-09-30: 2,379 Rust source lines (including inline tests),
-> 129 manifest cases and 42 default / 44 PCRE2 Rust tests. GNU differences
+> 137 manifest cases and 46 default / 48 PCRE2 Rust tests. GNU differences
 > and actual executed coverage are tracked in `GNU_VERIFICATION.md`.
 > Functional scope is complete; full GNU compatibility is not claimed.
 
@@ -102,9 +102,9 @@ Crate implementations are excluded; this is not an algorithmic equivalence metri
 
 | Type | Count |
 |---|---|
-| Manifest testcases | 129 (see GNU_VERIFICATION.md for actual parity/skip counts) |
+| Manifest testcases | 137 (see GNU_VERIFICATION.md for actual parity/skip counts) |
 | Property-based comparisons | 3072 per GNU run; skipped on BSD |
-| Library unit tests | 34 default, 36 with PCRE2 |
+| Library unit tests | 38 default, 40 with PCRE2 |
 | Other Rust tests | 3 boundary tests + 2 harness tests + 3 properties |
 
 The differential harness invokes `rgrep` and the system `grep` with

@@ -1,8 +1,8 @@
 # TODO — cosa resta da fare
 
 > Backlog attivo dell'esperimento `testag-grep` (GNU grep → Rust).
-> Aggiornato: 2026-09-30. Codice `rgrep` su `main` = `f2710b4` (pubblicato su
-> GitHub, CI verde 4/4). Ultimo audit registrato: `f2710b4` (anchor).
+> Aggiornato: 2026-09-30. Codice `rgrep` su `main` = `7865f61` (pubblicato su
+> GitHub, CI verde 4/4). Ultimo audit registrato: `f2710b4` (anchor); Step BD in attesa di audit.
 > Cosa è già stato fatto: [DONE.md](DONE.md). Come è fatto il progetto:
 > [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -270,8 +270,8 @@ testcase GNU-only (`skip_if_bsd`, BSD non supporta `-T`). Tocca
 
 ### P4 — Modalità strict come gate
 
-Dopo P2 e P3: rimuovere i campi `gnu_difference`/`gnu_stdout`/
-`gnu_stderr_contains` dai quattro case, verificare che
+Dopo P3 (P2 è chiuso dallo Step BD): rimuovere i campi `gnu_difference`/
+`gnu_stdout`/`gnu_stderr_contains` dai due case `-T`, verificare che
 `RGREP_STRICT_GNU=1 cargo test --test diff_runner` sia verde su Linux e
 renderlo il comando eseguito da `.github/workflows/verify.yml` nei job GNU.
 
@@ -304,7 +304,7 @@ uno step.
      locale UTF-8 (`encoding_error_output`); irrilevante con `LC_ALL=C`.
   Nessuna delle tre ha oggi un testcase; da decidere se documentarle
   come divergenze accettate (`D-NEW-6..8`) o aprire uno Step.
-- `diary/04a-divergences.md` storico non elenca le quattro divergenze GNU
+- `diary/04a-divergences.md` storico non elenca le divergenze GNU
   del 2026-09-30: ora sono in [ARCHITECTURE.md](ARCHITECTURE.md#divergenze-documentate).
 - Housekeeping outer: directory non tracciate `.serena/`, `.vexp/`,
   `_archive/` e working tree di `gnu-grep/` non pulito. Decidere se

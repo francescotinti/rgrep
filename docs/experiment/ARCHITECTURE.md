@@ -60,7 +60,7 @@ rgrep/
 │   ├── diff_runner.rs        256 LOC  harness differenziale process-spawn
 │   ├── proptest_differential.rs 100  3 strategie × 1024 casi
 │   ├── buffer_boundaries.rs   62      confini buffer senza oracolo
-│   ├── testsuite.toml                 manifest autoritativo (129 casi)
+│   ├── testsuite.toml                 manifest autoritativo (137 casi)
 │   └── cases/NNNN_<name>.toml
 ├── benches/search.rs         251 LOC  Criterion, 10 gruppi, process-spawn
 ├── tools/                    convert_gnu_tests.py, curate.py,
@@ -156,7 +156,8 @@ binario `grep` di sistema**, invocato per processo (niente FFI).
   con oracolo GNU e skip esplicito su BSD.
 - **Test senza oracolo**: `buffer_boundaries.rs` (record lunghi in
   streaming, CRLF, NUL, EOF senza terminatore, offset) e unit test inline
-  (34 default, 36 con PCRE2), inclusi i contratti del reader `read_delimited`.
+  (38 default, 40 con PCRE2), inclusi i contratti del reader `read_delimited`
+e gli helper della diagnostica binaria.
 - **CI** (`verify.yml`): matrice `ubuntu-latest`/`macos-latest` ×
   `default`/`perl-regexp`, toolchain 1.98.1, `fmt` + `build --locked` +
   `clippy -D warnings` + `test`, log per caso caricati come artefatti.
@@ -179,7 +180,7 @@ Rispetto a GNU grep canonico:
 | D-NEW-3 | `--color` default `never` invece di `auto` | scelta di design, aperta e accettata |
 | D-NEW-4 | Nessuna divergenza dai 3072 proptest | informativa |
 | D-NEW-5 | `-e "[" -e "]"` unite prima della validazione formavano `[|]`, regex valida | bug reale, chiuso Step 19 |
-| GNU 0054/0067 | Messaggio "binary file matches" su stdout (rgrep, GNU storico, BSD) contro stderr (GNU ≥3.5) | debito aperto, [TODO P2](TODO.md) |
+| GNU 0054/0067 | Messaggio "binary file matches" su stdout (GNU storico, BSD) contro stderr (GNU ≥3.5) | chiuso Step BD: rgrep segue GNU ≥3.5, case `skip_if_bsd` |
 | GNU 0064/0065 | `-T`: tab anteposto anche senza prefisso; padding diverso | debito aperto, [TODO P3](TODO.md) |
 | — | `-P` senza feature: exit 2 con messaggio GNU | intenzionale (D-M10) |
 
@@ -214,6 +215,7 @@ micro-ottimizzazione di `dfa_comp` con cache dei literal obbligatori.
 | Ondata 6 | `engine_is_match_bytes` nel trait con override per engine; loop `pure_count_quiet` senza `&str` |
 | Ondata 7 | `read_delimited` privato con `fill_buf` + `memchr`, usato da entrambi i loop |
 | Verifica GNU | Harness con oracolo esplicito, schema rigido, conteggi separati, strict mode, CI |
+| Step BD | Diagnostica binaria su stderr (GNU ≥3.5) tramite due helper puri nel ramo `is_binary`; `-c` conta tutte le righe; campo harness `expected_stderr_contains` |
 
 ### 7.2 Cosa hanno insegnato i profili
 

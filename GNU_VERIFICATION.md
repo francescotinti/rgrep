@@ -87,7 +87,7 @@ RGREP_ORACLE=/opt/homebrew/bin/ggrep cargo test --locked -- --nocapture
 RGREP_ORACLE=/opt/homebrew/bin/ggrep cargo test --locked --features perl-regexp -- --nocapture
 RGREP_ORACLE=/usr/bin/grep cargo test --locked -- --nocapture
 RGREP_ORACLE=/usr/bin/grep cargo test --locked --features perl-regexp -- --nocapture
-# Expected to fail until the four semantic differences are resolved:
+# Expected to fail until the two -T differences are resolved:
 RGREP_ORACLE=/opt/homebrew/bin/ggrep RGREP_STRICT_GNU=1 cargo test --test diff_runner -- --nocapture
 ```
 
